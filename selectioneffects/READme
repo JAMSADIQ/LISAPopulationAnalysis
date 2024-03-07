@@ -1,1 +1,3 @@
-Note that all these files are modified by Dr. Enrico Barausse and Jam Sadiq using files in ExtremeGravityLISASensitivity folder by Neil Cornish et al. 
+Note that all these files are modified by Dr. Enrico Barausse and Jam Sadiq using files in ExtremeGravityLISASensitivity folder by Neil Cornish et al.
+
+The script get_pdet_given_params can be used to get snr or pdet for an observed event with LISA noise 
