@@ -248,6 +248,7 @@ zgrid = np.logspace(-2, np.log10(20), 200)
 DL_eval = np.logspace(np.log10(44), np.log10(230421), 300)
 ##### We will use Weighted KDE code here for 1/pdet for weights rather awkde
 
+nl_1_over_XX, nl_1_over_YY = np.meshgrid(1.0/Mzgrid/np.log(10), np.ones_like(z_eval))# we need to factor
 XX, YY = np.meshgrid(np.log10(Mz_eval), z_eval)
 grid_pts = np.array(list(map(np.ravel, [XX, YY]))).T
 sample = np.vstack((np.log10(median_arr_Mz) ,median_arr_z)).T
@@ -262,31 +263,54 @@ print(sample.shape, all_samples.shape)
 #kdeval_Mz = normdata(kdeval_Mz,)
 bwMz, alpMz =  0.2, 0.6105402296585326
 bwz, alpz =  0.8, 0.03162277660168379
-bw2D, alp2D =  0.6, 0.5 #0.30000000000000004, 0.47705826961439296
+bw2D, alp2D =  0.8, 1.0 #0.30000000000000004, 0.47705826961439296
 
 # lets Try 2D case
 #ZZ, bw2D, alp2D = get_opt_params_and_kde(sample, grid_pts, alphagrid, bwgrid)
 kde_object, ZZ = adaptive_weighted_kde(sample, grid_pts, alpha=alp2D, bw=bw2D, weights=None, returnKDE=True)
 ZZ = ZZ.reshape(XX.shape)
+ZZ2 = ZZ*nl_1_over_XX 
 fig = plt.figure(figsize=(12, 6))
 ax1 = fig.add_subplot(121, projection='3d')
-ax1.plot_surface(XX, YY, ZZ, cmap='viridis')
+surface = ax1.plot_surface(XX, YY, ZZ, cmap='viridis', norm=LogNorm())
+fig.colorbar(surface, label='Log Scale')
+
 ax1.set_title('Mesh Plot')
 # Plot as contour
 ax2 = fig.add_subplot(122)
 contour = ax2.contour(XX, YY, ZZ, cmap='viridis')
 ax2.set_title('Contour Plot')
+#plt.savefig("Median2DKDE.png")
 plt.show()
+
+fig = plt.figure(figsize=(12, 6))
+ax1 = fig.add_subplot(121, projection='3d')
+#ax1.plot_surface(XX, YY, ZZ2, cmap='viridis')
+surface = ax1.plot_surface(XX, YY, ZZ2, cmap='viridis', norm=LogNorm())
+fig.colorbar(surface, label='Log Scale')
+ax1.set_title('Mesh Plot')
+# Plot as contour
+ax2 = fig.add_subplot(122)
+contour = ax2.contour(np.exp(XX)/np.log(10), YY, ZZ2, cmap='viridis')
+ax2.set_title('Contour Plot')
+ax2.set_xscale('log')
+#plt.savefig("Median2DKDE.png")
+plt.show()
+#quit()
 
 #### Get 1D plot from2D data using scipy.integrate.simpson
 
 from scipy.integrate import simpson
-def  ThreePlots(XX, YY, ZZ,  IntM, IntKDEM, IntZ, IntKDEz):
+def  ThreePlots(XX, YY, ZZ,  IntM, IntKDEM, IntZ, IntKDEz, logKDE=True,iternumber=1):
 #from scipy.integrate import simpson
 # Integrate along the Mz-axis Now we compute 2D KDE using log10M not M
-    kde_Z = simpson(y=ZZ, x=YY, axis=0) #itegrte wrt log10M x=YY mean sample of z vals
+    kde_Z = simpson(y=ZZ, x=YY, axis=0)
     # Integrate along the y-axis
-    kde_Mz = simpson(y=ZZ, x=XX, axis=1)
+    if logKDE==False:
+        nonln_XX = np.exp(XX)/np.log(10) 
+        kde_Mz = simpson(y=ZZ, x=nonln_XX, axis=1)
+    else:
+        kde_Mz = simpson(y=ZZ, x=XX, axis=1)
     kde_Mz = normdata(kde_Mz)
     kde_Z = normdata(kde_Z)
     
@@ -320,10 +344,12 @@ def  ThreePlots(XX, YY, ZZ,  IntM, IntKDEM, IntZ, IntKDEz):
     axs[0, 1].axis('off')
     plt.tight_layout()
     
+    #plt.savefig("IterativeKDE_plot_Iter{0}.png".format(iternumber))
     plt.show()
     return  0 
 ThreePlots(XX, YY, ZZ,  IntM, IntKDEM, IntZ, IntKDEz)
-
+ThreePlots(XX, YY, ZZ2,  IntM, IntKDEM, IntZ, IntKDEz, logKDE=False)
+quit()
 weights = 1.0/flat_pdet_all 
 #weights /= np.sum(weights)
 
@@ -333,17 +359,22 @@ print(len(weights), all_samples.shape)
 #kdevals  = kdevals.reshape(XX.shape)
 #ThreePlots(XX, YY, kdevals,  IntM, IntKDEM, IntZ, IntKDEz)
 #quit()
+
+frateh5 = h5.File('Saved_Data2DIterativeCase.hdf5', 'w')
+dsetxx = frateh5.create_dataset('LogMz', data=XX)
+dsetyy = frateh5.create_dataset('z', data=YY)
+
 discard = 10
 kdevalslist = []
-for i in range(100+discard):
+for i in range(1000+discard):
     rwpdet = []
     rwsamples = []
-    if i <=10:
+    if i <=100:
         for samples_Mz, samples_z, samples_pdet  in zip(sampleslists_Mz, sampleslists_z, sampleslists_pdet):
             #evaluate previous-step-kde onto samples
             #combine the samples note log10Mz
             samples = np.vstack((np.log10(samples_Mz), samples_z)).T
-            print(samples.shape, len(samples_pdet))
+            #print(samples.shape, len(samples_pdet))
             fpop = kde_object.evaluate(samples)
             fpop /= fpop.sum()
  
@@ -361,11 +392,12 @@ for i in range(100+discard):
         kdeobject, kdevals = adaptive_weighted_kde(rwsamples, grid_pts, alpha=alp2D, bw=bw2D, weights=weights, returnKDE=True)
         kdevals = kdevals.reshape(XX.shape)
         kdevalslist.append(kdevals)
+
     else:
         for samples_Mz, samples_z, samples_pdet  in zip(sampleslists_Mz, sampleslists_z, sampleslists_pdet):
             samples = np.vstack((np.log10(samples_Mz), samples_z)).T
             rng = np.random.default_rng()
-            previousKDE_list = kdevalslist[-10:]
+            previousKDE_list = kdevalslist[-100:]
             interpkdeval_list = []
             for kde_values in previousKDE_list:
                 interp = RegularGridInterpolator((LogMzgrid, zgrid), kde_values, bounds_error=False, fill_value=0.0)
@@ -383,15 +415,16 @@ for i in range(100+discard):
         kdeobject, kdevals = adaptive_weighted_kde(rwsamples, grid_pts, alpha=alp2D, bw=bw2D, weights=weights, returnKDE=True)
         kdevals = kdevals.reshape(XX.shape)
         kdevalslist.append(kdevals)
-        
-    if  i %10 == 0:
-        ThreePlots(XX, YY, kdevals,  IntM, IntKDEM, IntZ, IntKDEz)
+         
+    if  i %50 == 0:
+        ThreePlots(XX, YY, kdevals,  IntM, IntKDEM, IntZ, IntKDEz, iternumber=i)
 
+    frateh5.create_dataset('rate_iter{0:04}'.format(i), data=kdevals)
+    print(i, "step done ")
 
-
+frateh5.close()
 # Transpose the list of lists to get lists of corresponding elements
 transposed_lists = list(map(list, zip(*kdevalslist)))
 # Calculate the average of each corresponding element
 average_list = [sum(values) / len(values) for values in transposed_lists]
-ThreePlots(XX, YY, kdevals,  IntM, IntKDEM, IntZ, IntKDEz)
-
+ThreePlots(XX, YY, kdevals,  IntM, IntKDEM, IntZ, IntKDEz, iternumber=1010)
