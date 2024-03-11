@@ -3,17 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Plots Gallery</title>
+    <title>PopIII-Plots Gallery</title>
+    <style>
+        body {
+            text-align: center;
+        }
+	</style>
 </head>
 <body>
 <nav id="mainnav">
-<a href="index.html">Home</a>
 </`nav>
 <!-- Use a for loop to generate img tags for IterKDE0.png to IterKDE10.png -->
 <script>
-    for (let i = 0; i <= 1000; i+=20) {
-        document.write(`<img src="Plots/KDE_Mz_at_iter${i}.png" alt="Plot ${i}">`);
-        document.write(`<img src="Plots/KDE_at_iter${i}.png" alt="Plot ${i}">`);
+    for (let i = 0; i <= 1000; i+=50) {
+
+        document.write(`
+	<div class="image-container">
+	<h2>Iteration ${i}</h2>
+	<img src="Plots/TwoDKDE_Mz_z_at_iter${i}.png" alt="Plot ${i}">
+         </div>
+		`);
     }
 </script>
 
