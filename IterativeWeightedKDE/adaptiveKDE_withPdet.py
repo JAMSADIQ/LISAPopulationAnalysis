@@ -70,7 +70,7 @@ def get_random_sample(original_samples, bootstrap='poisson'):
     return reweighted_sample
 
 
-def get_reweighted_sample(original_samples, vtvals, fpop_kde, bootstrap='poisson', prior_factor=prior_factor_function):
+def get_reweighted_sample(original_samples, pdetvals, fpop_kde, bootstrap='poisson', prior_factor=prior_factor_function):
     """
     inputs 
     original_samples: list of mean of each event samples 
@@ -87,9 +87,9 @@ def get_reweighted_sample(original_samples, vtvals, fpop_kde, bootstrap='poisson
     use in np.random.choice  on kwarg 
     """
     # need to test this
-    fkde_samples = fpop_kde.predict(original_samples)#*1.0/vtvals
-    vtvals[vtvals < 1e-3] = 0
-    fkde_samples = division_a_by_b(fkde_samples, vtvals)
+    fkde_samples = fpop_kde.predict(original_samples) #*1.0/vtvals
+    pdetvals[pdetvals < 1e-3] = 0
+    fkde_samples = division_a_by_b(fkde_samples, pdetvals) #here we divide by weights
     frate_atsample = fkde_samples * prior_factor(original_samples) 
     fpop_at_samples = frate_atsample/frate_atsample.sum() # normalize
     rng = np.random.default_rng()
