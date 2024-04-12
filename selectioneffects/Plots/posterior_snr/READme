@@ -1,1 +1,1 @@
-Here are add histograms of SNR for all events with posterior parameters and json based waveformparameters.
+Here are histograms of SNR for all events with posterior-parameters and using the json based waveformparameters. The events-tag with true snr are in .dat file 
