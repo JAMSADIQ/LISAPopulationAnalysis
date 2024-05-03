@@ -69,7 +69,7 @@ def SNRavPhenomA(m1z,m2z,dL,tc,duration):
     return np.sqrt(I)
 
 
-m1arr, m2arr, dLarr, xi1arr, xi2arr = np.loadtxt('/u/j/jsadiq/Documents/E_awKDE/CatalogLISA/EnricotheoreticalData/popIII/Recompute/allcatalogData_m1_m2_dL_xi1_xi2.dat', unpack=True)
+m1arr, m2arr, dLarr, xi1arr, xi2arr = np.loadtxt('all_intrinsic_catalog_data_100years_m1_m2_dL_xi1_xi2.dat', unpack=True)
 from astropy import cosmology
 from astropy import units
 from astropy.cosmology import  z_at_value, Planck15
