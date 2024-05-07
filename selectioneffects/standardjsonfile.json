@@ -1,0 +1,148 @@
+{
+   "source_params": {
+      "M": 17242.256616,
+      "q": 1.0703439335372746,
+      "chi1": 0.9131345617875702,
+      "chi2": 0.7945924149673832,
+      "Deltat": 0.0,
+      "dist": 174725.0,
+      "inc": 2.922804293114405,
+      "phi": -1.849303310631142,
+      "lambda": -1.015821780065965,
+      "beta": 1.0802771358229457,
+      "psi": 1.224723572972617,
+      "Lframe": true
+   },
+   "waveform_params": {
+      "minf": 1e-05,
+      "maxf": 0.5,
+      "t0": 0.0,  
+      "timetomerger_max": 1.0,
+      "fend": null,
+      "tmin": null,
+      "tmax": null,
+      "phiref": 0.0,
+      "fref_for_phiref": 0.0,
+      "tref": 0.0,
+      "fref_for_tref": 0.0,
+      "force_phiref_fref": true,
+      "toffset": 0.0,
+      "modes": null,
+      "TDI": "TDIAET",
+      "acc": 0.0001,
+      "order_fresnel_stencil": 0,
+      "approximant": "IMRPhenomHM",
+      "LISAconst": "Proposal",
+      "responseapprox": "full",
+      "frozenLISA": false,
+      "TDIrescaled": true,
+      "LISAnoise": {
+         "InstrumentalNoise": "SciRDv1",
+         "WDbackground": true,
+         "WDduration": 3.0,
+         "lowf_add_pm_noise_f0": 0.0,
+         "lowf_add_pm_noise_alpha": 2.0
+      }
+   },
+   "prior_params": {
+      "list_params": [
+         "M",
+         "q",
+         "chi1",
+         "chi2",
+         "Deltat",
+         "dist",
+         "inc",
+         "phi",
+         "lambda",
+         "beta",
+         "psi"
+      ],
+      "infer_params": [
+         "M",
+         "q",
+         "chi1",
+         "chi2",
+         "Deltat",
+         "dist",
+         "inc",
+         "phi",
+         "lambda",
+         "beta",
+         "psi"
+      ],
+      "params_range": [
+         [
+            100.0,
+            100000000.0
+         ],
+         [
+            1.0,
+            10000.0
+         ],
+         [
+            -1.0,
+            1.0
+         ],
+         [
+            -1.0,
+            1.0
+         ],
+         [
+            -1000.0,
+            1000.0
+         ],
+         [
+            100.0,
+            1000000.0
+         ],
+         [],
+         [],
+         [],
+         [],
+         []
+      ],
+      "prior_type": [
+         "uniform",
+         "uniform",
+         "uniform",
+         "uniform",
+         "uniform",
+         "uniform",
+         "sin",
+         "uniform",
+         "uniform",
+         "cos",
+         "uniform"
+      ],
+      "wrap_params": null
+   },
+   "run_params": {
+      "out_dir": "./catalogs_recomputed/popIII/json-params/samples/",
+      "out_name": "catalog_1_yrs.txt.92.195",
+      "sampler": "ptemcee",
+      "sample_Lframe": true,
+      "multimodal": true,
+      "multimodal_pattern": "8modes",
+      "p_jump": 0.5,
+      "likelihood_method": "fresnel",
+      "likelihood_residuals_ngrid": 128,
+      "skip_fisher": false,
+      "init_method": "fisher",
+      "init_scale_cov": 1.0,
+      "zerolike": false,
+      "n_temps": 10,
+      "temp_max": null,
+      "n_walkers": 64,
+      "n_iter": 8000,
+      "burn_in": 1000,
+      "autocor_method": "acor",
+      "thin_samples": true,
+      "upsample": 1,
+      "seed": null,
+      "print_info": false,
+      "n_iter_info": 10,
+      "output": true,
+      "output_raw": false
+   }
+}
