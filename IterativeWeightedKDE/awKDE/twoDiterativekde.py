@@ -10,7 +10,6 @@ from scipy.interpolate import RegularGridInterpolator
 import sys
 
 import utils_awkde as u_awkde
-import utils_data as u_data
 import utils_plot as u_plot
 
 
