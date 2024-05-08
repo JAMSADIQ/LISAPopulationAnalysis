@@ -89,7 +89,7 @@ def  ThreePlots(XX, YY, ZZ,  TheoryMtot, Theory_z, logKDE=True,  iternumber=1, p
     #kde_Z = normdata(kde_Z)
 
     # Plot the original function
-    fig, axs = plt.subplots(2, 2, figsize=(12, 8))
+    fig, axs = plt.subplots(2, 2, figsize=(8, 8), gridspec_kw={'width_ratios': [1, 0.5], 'height_ratios': [0.5, 1]})
     #ax1 = fig.add_subplot(121, projection='3d')
     axs[1,0].contour(XX, YY, ZZ, cmap='viridis')
     axs[1,0].set_xlabel('Log10[Mz]')
