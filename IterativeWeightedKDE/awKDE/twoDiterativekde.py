@@ -266,10 +266,8 @@ frateh5.create_dataset('bandwidths', data=iterbwlist)
 frateh5.create_dataset('alphas', data=iteralplist)
 
 frateh5.close()
-kde1000lists = kdevalslist[100: ]
-transposed_lists = list(map(list, zip(*kde1000lists)))
-# Calculate the average of each corresponding element
-average_list = [sum(values) / len(values) for values in transposed_lists]
+# Calculate the average of all KDE after discard
+average_list = np.percentile(kdevalslist[100:], 50, axis=0) 
 u_plot.ThreePlots(XX, YY, average_list,  TheoryMtot, Theory_z, iternumber=1001, plot_name='Awcombined_all')
 
 
