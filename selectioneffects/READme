@@ -1,3 +1,7 @@
 Note that all these files are modified by Dr. Enrico Barausse and Jam Sadiq using files in ExtremeGravityLISASensitivity folder by Neil Cornish et al.
 
-The script get_pdet_given_params can be used to get snr or pdet for an observed event with LISA noise 
+There are three folder for SNR or pdet calculation. ExtremeGravity is fully copied but not used directly in this work.
+LISASensitivity is based on ExtremGravity repo but modified and can be good enough for simple parameters tests. PhenomC limits 
+
+The main code we use in this study is lisa-beta code by Sylvain-Marsat. Using lisabeta have scripts that require modules and packages from lisa-beta.
+
