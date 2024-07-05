@@ -1,5 +1,12 @@
-These are plots related to popIII model
+We are using specific popIII model data.
+This folder contains information about the data of posteriors of observed events with LISA.
+Plots explain about data.
+
+[we focus on Total redshifted mass and Luminosity distance or redshift(Planck15 cosmo)]
+
 We have three types of plots
-Intrinsic plots are astrophysical events 
-True plots are true values of observed samples
-PE plots are parameter estimation results plots
+1: intrinsic astrophysical events data plots (assuming we know true distribution and have the parameters of those.)
+
+2: observed events (injected) true parameters plots are true values of observed samples
+
+3: PE plots are parameter estimation results plots [with and without lensing effects]
