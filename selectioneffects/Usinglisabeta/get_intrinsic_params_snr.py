@@ -66,7 +66,7 @@ with open('standardjsonfile.json', 'r') as filej:
 waveform_params = data['waveform_params']
 
 import pathlib
-#######combine all files for 100 years of Catalogs 
+#######combine all files for 100 years of Catalogs assuming there are .txt files for each (100) year 
 listfile = list(pathlib.Path('./').glob('*.txt.*'))
 snr_threshold = 8.0
 snr_arr = []
@@ -77,7 +77,8 @@ z_det = []
 
 def swap_elements(m1val, m2val):
     """
-    since catalog data can have m1> m2 or vice versa
+    since catalog data can have m1 > m2 or vice versa
+    we label bigger mass to be m1 so use swap
     """
     result_m1val = []
     result_m2val = []
@@ -96,7 +97,7 @@ for filename in listfile:
     z_cosmo = d[0]
     #we need planck cosmology
     dL = d[1]
-    z = get_zarray(dL)
+    z = get_zarray(dL) # for Planck15 como
     m1 = d[2]
     m2 = d[3]
     m1, m2 = swap_elements(m1, m2)
@@ -145,4 +146,5 @@ ax2.legend()
 fig.suptitle('popIII intrinsic 100 years', fontsize=16)
 plt.tight_layout()
 plt.show()
+
 
