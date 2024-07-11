@@ -1,0 +1,6 @@
+These are files including 
+1: Intrinsic data without selection effects
+2:Intrinsic data with selection effects
+3: Combined 4 years Observed data with ~100 random samples  from each events with Mz_tot, z and corresrponding matchfilter Pdet (hdf, .txt for all, .txt of medians of all)
+  there is just one year events file as well but it can be deleted or used as well
+
