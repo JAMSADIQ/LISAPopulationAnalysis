@@ -7,7 +7,7 @@ from constants import *
 import traceback
 import matplotlib.pyplot as plt
 
-def save_data_to_file(data, filename='Latest_enrico_code_output_dataM_DL_Pdet.txt'):
+def save_data_to_file(data, filename='output_dataMz_DL_Pdet.txt'):
     try:
         with open(filename, 'a') as file:
              file.write('        '.join(map(str, data)) + '\n')
@@ -112,7 +112,8 @@ combine_z_median= []
 combine_DL100= []
 combine_pdet = []
 combine_indices = []
-import h5py as h5
+import h5py as h5 
+#Assuming we have posteriors in h5 file 
 file_path = 'filename' 
 with open(file_path, 'r')as file:
     lines = file.readlines()
