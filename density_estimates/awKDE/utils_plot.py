@@ -39,7 +39,7 @@ def normdata(dataV):
 
 dict_p = {'m1':'m_1', 'm2':'m_2', 'Xieff':'\chi_{eff}', 'chieff': '\chi_{eff}', 'DL':'D_L', 'logm1':'ln m_1', 'logm2': 'ln m_2', 'alpha':'\alpha'}
 ###########
-def new2DKDE(XX, YY,  ZZ, LogMzvals, zvals, pdetvals, title='KDE', iterN=0, saveplot=False):
+def TwocontourKDE(XX, YY,  ZZ, LogMzvals, zvals, pdetvals, title='KDE', iterN=0, saveplot=False):
     contourlevels = np.logspace(-7, 0, 10)
     plt.figure(figsize=(8, 6))
     contourlevels = np.logspace(-7, 3, 10)[3:]
@@ -179,53 +179,6 @@ def Delnew2DKDE(XX, YY,  ZZ, title='KDE', iterN=0, saveplot=False):
 
 
 
-
-##### Plots for Mock Data ###########################
-def originaldataKDE_and_analyticfunc_plot(x_gridvalues, analyticfuncvalue, originalkdevalues, origalpha, origbw, m1_pow=0, pathplot='./', plot_analytic=False):
-    """
-    inputs:x_gridvalues, analyticfuncvalue, originalkdevalues, origalpha, origbw
-    give plots with original dataKDE and analytic function with
-    params of original mock data
-    """
-    fig = plt.figure(figsize=(8, 5))
-    ax = plt.subplot(111)
-    if plot_analytic==True:
-        ax.plot(x_gridvalues, analyticfuncvalue, lw=2, ls='solid', color='k', label='Analytic')
-
-    ax.plot(x_gridvalues, originalkdevalues, lw=2, ls='dashed', color='r', label=r'$orig KDE ,\alpha={0}, bw={1:.2f}$'.format(1, origbw))
-    lgd = ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.2),
-          ncol=2, fancybox=False)
-    ax.set_ylim(ymin=1e-4)
-    ax.semilogy()
-    fig.savefig(pathplot+'OriginalmockdataKDE_Analyticfunc_pow_{0}.png'.format(m1_pow), bbox_extra_artists=(lgd,), bbox_inches='tight')
-    plt.close()
-    return 0
-
-
-def KDesPlot(x_gridvalues, true_y, errorkdeval, errorbw, kdelist, bwlist, pathplot='./', titlename=1, plot_analytic=False):
-    """
-    Inputs: x_gridvalues, true_y, errorkdeval, errorbw, kdelist, bwlist, pathplot
-    we should use this when all iterations are done
-    """
-    fig = plt.figure(figsize=(9, 6))
-    ax = plt.subplot(111)
-    if plot_analytic ==True:
-        ax.plot(x_gridvalues, true_y, lw=2, ls='dotted', color='cyan', label='True-dist')
-    ax.plot(x_gridvalues, errorkdeval, lw=2, ls='dashed', color='b', label=r'$error,\alpha={0},bw={1:.2f}$'.format(1, errorbw))
-    for l in range(len(kdelist)):
-        plt.plot(x_gridvalues, kdelist[l], lw=1, ls='solid', label=r'$Iter{0} ,\alpha={1},bw={2:.2f}$'.format(l+1, 1, bwlist[l]))
-    ax.set_xlabel(r"$m_1$")
-    ax.set_ylabel(r"$p(m_1)$")
-    # Put a legend to the right of the current axis
-    lgd = ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.2),
-          ncol=3, fancybox=False)
-    #ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-    ax.semilogy()
-    fig.savefig(pathplot+'Errored_{0}Iterations_KDEs_step{1}.png'.format(len(kdelist), titlename), bbox_extra_artists=(lgd,), bbox_inches='tight')
-    #plt.savefig(pathplot+'Errored_{0}Iterations_KDEs.png'.format(len(kdelist)))
-    plt.close()
-    return 0
-
 def histogram_bwdata(datalist, dataname='bw',  pathplot='./', Iternumber=1):
     plt.figure(figsize=(8,6))
     plt.xlabel(dataname, fontsize=15)
@@ -262,132 +215,6 @@ def histogram_datalist(datalist, dataname='bw',  pathplot='./', Iternumber=1):
     plt.close()
     return 0
 
-def histogram_all_PEmockdata(samplelists_all, binvals=100, x_label='m1', pathplot='./'):
-    """
-    inputs
-        samplelists: having a list of lists[arrays] mockPEsamples
-        binvals: bydefault=100
-        x_labels must be part of dict m1, m2 Xieff chieff DL
-        pathplot: as label suggest give a pathwhere to save the plot
-
-       get histogram combining all data
-    """
-    #list of lists data into a single row or column
-    combinedata = np.concatenate(samplelists_all) 
-    plt.figure(figsize=(8,6))
-    plt.hist(combinedata, bins=binvals, color='red', fc='gray', histtype='step', alpha=0.8, density=True, label='mockdata')
-    plt.xlabel(x_label, fontsize=18)
-    plt.legend()
-    plt.savefig(pathplot+x_label+'_combine_PEmockdata_histogram.png', bbox_inches='tight')
-    plt.close()
-    return 0
-
-
-def histogram_original_shifted_data(originalmean, shiftedmean, Iternumber, pathplot='./'):
-    """
-    inputs: originalmean, shiftedmean, Iternumber, pathplot
-    histogram to see shifted data alaonf with original data
-    """
-    plt.figure()
-    plt.hist(originalmean, 30, color='red', fc='gray', histtype='step', alpha=0.8, density=True, label='sample')
-    plt.hist(shiftedmean, 30, color='b', fc='gray', histtype='step', alpha=0.8, density=True, label='shifted-sample')
-    plt.xlabel(r'$m_1$')
-    plt.ylabel(r'$p(m_1)$')
-    plt.legend()
-    plt.savefig(pathplot+"errored_vs_shifted_data_histogramIter{0}.png".format(Iternumber), bbox_inches='tight')
-    plt.close()
-    return 0
-
-def plot_scatter_originalmock_vs_error_data(originalmockdata, erroreddata, frac_gauss, mu_gauss, maxsigma_gauss, pathplot='./'):
-    """
-    inputs: originalmockdata, erroreddata, frac_gauss, mu_gauss, maxsigma_gauss, pathplot
-    """
-    plt.figure()
-    plt.scatter(originalmockdata, erroreddata,color='red', label =r'$\alpha=0,fp={0:.2f},\mu={1:.2f},max \sigma={2:.2f}$'.format(frac_gauss, mu_gauss, maxsigma_gauss))
-    plt.xlabel(r"$m_1$")
-    plt.ylabel(r"$m_1 \pm \sigma{0}$".format(maxsigma_gauss))
-    plt.legend()
-    plt.savefig(pathplot+"scatter_original_vs_errored_data.png", bbox_inches='tight')
-    plt.close()
-    return 0
-
-
-def erroreddataKDE_and_analyticfunc_plot(x_gridvalues, analyticfuncvalue, erroredkdevalues, origalpha, origbw, pathplot='./', plot_analytic=False):
-    """
-    inputs:x_gridvalues, analyticfuncvalue, originalkdevalues, alpha, bw
-    give plots with error dataKDE and analytic function with
-    params of original mock data
-    """
-    fig = plt.figure(figsize=(8, 5))
-    ax = plt.subplot(111)
-    if plot_analytic==True:
-        ax.plot(x_gridvalues, analyticfuncvalue, lw=2, ls='solid', color='cyan', label='Analytic')
-    ax.plot(x_gridvalues, erroredkdevalues, lw=2, ls='dashed', color='b', label=r'$erroredKDE ,\alpha={0}, bw={1:.2f}$'.format(1, origbw))
-    lgd = ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.2), ncol=2, fancybox=False)
-    ax.set_ylim(ymin=1e-4)
-    ax.semilogy()
-    fig.savefig(pathplot+'ErroredmockdataKDE_Analyticfunc.png', bbox_extra_artists=(lgd,), bbox_inches='tight')
-    plt.close()
-    return 0
-
-def averagekde_plot_mock(x_grid, analyticfuncvalue, kdelists, pathplot='./', titlename=1, plot_analytic=False, final=False):
-    meankde = np.zeros_like(x_grid)
-    for kde in kdelists:
-        meankde += kde/len(kdelists)
-    #5th, 50th and 95th percentile kde
-    CI5 = np.percentile(kdelists, 5, axis=0)
-    CI50 = np.percentile(kdelists, 50, axis=0)
-    CI95 = np.percentile(kdelists, 95, axis=0)
-    plt.figure(figsize=(8, 5))
-    if plot_analytic==True:
-        plt.plot(x_grid, analyticfuncvalue, 'k--', label='analytic')
-    plt.plot(x_grid, meankde, 'r', label='median')
-    plt.plot(x_grid, CI5, 'r-.', label='5th')
-    plt.plot(x_grid, CI95, 'r-.', label='95th')
-    plt.ylim(ymin = 1e-4)
-    plt.xlim(2, 101)
-    plt.semilogy()
-    plt.legend()
-    #plt.title('Iter{0}'.format(titlename))
-    plt.savefig(pathplot+"averagekdeIter{0}.png".format(titlename), bbox_inches='tight')
-    plt.close()
-    if final ==True:
-        np.savetxt('No_reweight_NoBots_x_analytic_kde50_5_95.txt', np.c_[x_grid, analyticfuncvalue, meankde, CI5, CI95])
-    return meankde
-
-
-
-
-#################################################################################
-##################  GWTC3_dataPLOts #############################################
-def averagekde_plot(x_grid, kdelists, pathplot='./', titlename=1, plot_analytic=False, plot_label='KDE'):
-    meankde = np.zeros_like(x_grid)
-    for kde in kdelists:
-        meankde += kde/len(kdelists)
-    #5th, 50th and 95th percentile kde
-    CI5 = np.percentile(kdelists, 5, axis=0)
-    CI50 = np.percentile(kdelists, 50, axis=0)
-    CI95 = np.percentile(kdelists, 95, axis=0)
-    np.savetxt(plot_label+"_1D_data_xgrid_median_5th_50th_95th_average_Iter{0}.txt".format(titlename), np.c_[x_grid, meankde, CI5, CI50, CI95])
-    plt.figure(figsize=(8, 5))
-    if plot_analytic==True:
-        plt.plot(x_grid, analyticfuncvalue, 'k--', label='analytic')
-    plt.plot(x_grid, meankde, 'r', label='median')
-    plt.plot(x_grid, CI5, 'r-.', label='5th')
-    plt.plot(x_grid, CI95, 'r-.', label='95th')
-    plt.ylim(1e-4, 10.0)
-    plt.xlim(0, 120)
-    plt.semilogy()
-    plt.legend()
-    plt.xlabel(r'$m_1$', fontsize=15)
-    if plot_label=='Rate':
-        plt.ylabel(r'$\mathrm{d}\mathcal{R}/\mathrm{d}m_1[\mathrm{Gpc}^{-3}\,\mathrm{yr}^{-1}\mathrm{M}_\odot^{-1}]$', fontsize=15)
-    else:
-        plt.ylabel(r'$p(m_1)$', fontsize=15)
-    plt.title('Iter{0}'.format(titlename))
-    plt.savefig(pathplot+plot_label+"1D_averagekdeIter{0}.png".format(titlename), bbox_inches='tight')
-    plt.close()
-    return meankde
 
 def average2Dkde_plot(sample, m1vals, m2vals, XX, YY, kdelists, pathplot='./', titlename=1, plot_label='Rate', x_label='m1', y_label='m2', plot_error=False):
     sample1, sample2 = m1vals, m2vals
@@ -524,15 +351,6 @@ def average_allkde_plot(x_grid, analyticfuncvalue, kdelists, pathplot='./', plot
     #plt.savefig(pathplot+"combinedkde.png")
     plt.close()
 
-def add_random_n_places(a, n):
-    # Generate a float version
-    out = a.astype(float)
-    # Generate unique flattened indices along the size of a
-    idx = np.random.choice(a.size, n, replace=False)
-
-    # Assign into those places ramdom numbers in [-1,1)
-    out.flat[idx] += np.random.uniform(low=-1, high=1, size=n)
-    return out
 
 def bandwidth_correlation(bwlist,  number_corr=100, error=0.02, param='bw', pathplot='./', log=True):
     """
@@ -611,105 +429,6 @@ def bandwidth_correlation(bwlist,  number_corr=100, error=0.02, param='bw', path
 
 
 
-def twoDKDEplot(sample, XX, YY, ZZ, pathplot='./', x_label='m1', y_label='m2'):
-    sample1, sample2 = sample[:, 0], sample[:, 1]
-    fig, axl = plt.subplots(1,1,figsize=(8,6))
-    if y_label == 'm2':
-        contourlevels = np.logspace(-5, 0.5, 10)#np.array([ 1e-5, 1e-4, 3e-4,1e-3, 3e-3, 1e-2, 3e-2, 6e-2, 1e-1, 3e-1, 6e-1, 1])
-        p = axl.pcolormesh(XX, YY, ZZ, cmap=plt.cm.get_cmap('Purples'), vmin=1e-5, norm=LogNorm(),  label=r'$p(m_1, m_2)$')
-        cbar = plt.colorbar(p, ax= axl)
-        #cbar.set_label(r'$p(\ln\, m_1,\ln \, m_2)$',fontsize=18)
-        cbar.set_label(r'$p(m_1, m_2)$', fontsize=18)
-        CS = axl.contour(XX, YY, ZZ, colors='black', levels=contourlevels ,vmin=1e-5,linestyles='dashed', linewidths=2, norm=LogNorm())
-        axl.scatter(sample1, sample2,  marker="+", color="r", s=20)
-        axl.scatter(sample2, sample1,  marker="+", color="r", s=20)
-        sx = np.arange(3, 100, 1)
-        ### uncomment this
-        axl.fill_between(sx, sx, 100, color='white', alpha=1, zorder=5)
-        #axl.fill_between(np.arange(0, 100), np.arange(0, 100),100 , color='white',alpha=1,zorder=50)
-        #axl.fill_between(np.arange(0, 50), np.arange(0, 50), 50 , color='white',alpha=1,zorder=100)
-        axl.set_ylim(2.3, 101)
-        #axl.set_ylim(2, 101)
-
-        axl.tick_params(axis="y",direction="in")
-        axl.yaxis.tick_right()
-        axl.yaxis.set_ticks_position('both')
-
-        axl.set_ylabel(r'$m_2\,[M_\odot]$', fontsize=18)
-
-    else:
-        p = axl.pcolormesh(XX, YY, ZZ, cmap=plt.cm.get_cmap('Purples'), norm=LogNorm(),  label=r'$p(m_1,'+dict_p[y_label] + ')$')
-        CS = axl.contour(XX, YY, ZZ, colors='black', linestyles='dashed', linewidths=2, norm=LogNorm())
-        axl.scatter(sample1, sample2,  marker="+", color="r", s=20)
-        cbar = plt.colorbar(p, ax= axl)
-        cbar.set_label(r'$p(m_1, '+dict_p[y_label]+ ')$',fontsize=18)
-    cbar.ax.tick_params(labelsize=20)
-    axl.tick_params(labelsize=18)
-    axl.set_xlabel(r'$m_1\,[M_\odot]$', fontsize=18)
-    scale_y = 1#e3
-    ticks_y = ticker.FuncFormatter(lambda x, pos: '{0:g}'.format(x/scale_y))
-    axl.yaxis.set_major_formatter(ticks_y)
-    axl.set_xlim(3, 100.1)
-    axl.set_aspect('equal')
-
-    #axl.set_xlim(2, 101)
-    #axl.set_ylabel(r'$'+dict_p[y_label]+'$')
-    fig.tight_layout()
-
-    #axl.loglog()
-    plt.savefig(pathplot+'m1_'+y_label+'_2DKDE.png', bbox_inches='tight')
-    plt.close()
-    return 0
-
-
-
-#### If we just have one iteration Rate 
-def twoDRateplot(sample, XX, YY, ZZ, pathplot='./', x_label='m1', y_label='m2', paramtype='linear'):
-    sample1, sample2 = sample[:, 0], sample[:, 1]
-    fig, axl = plt.subplots(1,1,figsize=(8,6))
-    if y_label == 'm2':
-        contourlevels = np.logspace(-4, 1.2, 8)#np.array([1e-4, 3e-4,1e-3, 3e-3, 1e-2, 3e-2, 6e-2, 1e-1, 3e-1, 6e-1, 1, 10, 15, 20])
-        p = axl.pcolormesh(XX, YY, ZZ, cmap=plt.cm.get_cmap('Purples'), vmin=1e-5, norm=LogNorm())
-        cbar = plt.colorbar(p, ax= axl)
-        cbar.set_label(r'$\mathrm{d^2}\mathcal{R}/\mathrm{d\,ln}\,m_1\mathrm{d\,ln}\,m_2[\mathrm{Gpc}^{-3}\,\mathrm{yr}^{-1}\mathrm{ln\, M}_\odot^{-2}]$',fontsize=18)
-        #cbar.set_label(r'$\mathrm{d}\mathcal{R}/\mathrm{d} m_1 \mathrm{d} m_2[\mathrm{Gpc}^{-3}\,\mathrm{yr}^{-1}\mathrm{M}_\odot^{-2}]$',fontsize=18)
-
-        #CS = axl.contour(XX, YY, ZZ, colors='black', levels=contourlevels ,vmin=1e-5,linestyles='dashed', linewidths=2, norm=LogNorm())
-        CS = axl.contour(XX, YY, ZZ, colors='black',vmin=1e-5,linestyles='dashed', linewidths=2, norm=LogNorm())
-        axl.scatter(sample1, sample2,  marker="+", color="r", s=20)
-        axl.scatter(sample2, sample1,  marker="+", color="r", s=20)
-        #axl.fill_between(np.arange(0, 100), np.arange(0, 100), 100 , color='white',alpha=1,zorder=50)
-        #axl.fill_between(np.arange(0, 50), np.arange(0, 50), 50 , color='white',alpha=1,zorder=100)
-        sx = np.arange(3, 100, 1)
-        axl.fill_between(sx, sx, 100, color='white', alpha=1, zorder=50)
-        #axl.fill_between(sx, 0, 100, color='white', alpha=1, zorder=50, where=sx>1)
-        
-        #axl.fill_between(np.arange(100), np.arange(100), 100, color='white' , alpha=1, zorder=50)
-        axl.set_ylim(2.3, 101)
-        axl.set_ylabel(r'$m_2\,[M_\odot]$', fontsize=18)
-
-    else:
-        p = axl.pcolormesh(XX, YY, ZZ, cmap=plt.cm.get_cmap('Purples'), norm=LogNorm(),  label=r'$p(m_1,'+dict_p[y_label] + ')$')
-        CS = axl.contour(XX, YY, ZZ, colors='black', linestyles='dashed', linewidths=2, norm=LogNorm())
-        axl.scatter(sample1, sample2,  marker="+", color="r", s=20)
-        cbar = plt.colorbar(p, ax= axl)
-        cbar.set_label(r'$\mathrm{d}\mathcal{R}/\mathrm{d}m_1\mathrm{d}'+dict_p[y_label]+'[\mathrm{Gpc}^{-3}\,\mathrm{yr}^{-1}\mathrm{M}_\odot^{-1}]$',fontsize=18)
-    
-    cbar.ax.tick_params(labelsize=20)
-    axl.tick_params(labelsize=18)
-    axl.set_xlabel(r'$m_1\,[M_\odot]$', fontsize=18)
-    scale_y = 1#e3
-    ticks_y = ticker.FuncFormatter(lambda x, pos: '{0:g}'.format(x/scale_y))
-    axl.yaxis.set_major_formatter(ticks_y)
-    axl.set_xlim(3, 100.1)
-    axl.set_aspect('equal')
-    #axl.set_ylabel(r'$'+dict_p[y_label]+'$')
-    fig.tight_layout()
-    axl.loglog()
-    plt.savefig(pathplot+'m1_'+y_label+'_2DRate.png', bbox_inches='tight')
-    plt.close()
-    return 0
-
 
 import matplotlib.gridspec as gridspec
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -774,23 +493,6 @@ def combine_twoD1Dplot(XX, YY, ZZ, sample1, sample2, x_gridvalues, analyticfuncv
     plt.savefig(pathplot+'testplot.png', bbox_inches='tight')
     plt.close()
 
-
-def average_rate_component(m1val, m2val, ratem1, ratem2, truem1, truem2 ,pathplot='./'):
-    plt.figure(figsize=[7.2, 4.8])
-    plt.semilogy(m1val, np.median(ratem1, axis=0), 'C0-', label='m')
-    plt.semilogy(m1val, truem1, color='k', lw=2, ls='--', label='Analytic')
-    plt.fill_between(m1val, np.percentile(ratem1, 95., axis=0) , np.percentile(ratem1, 5., axis=0), color='C0', alpha=0.2)
-    #plt.semilogy(m2val, numpy.median(ratem2, axis=0) / m2val, 'C1-', label='Secondary mass')
-    #plt.semilogy(m2val, truem2, color='magenta', lw=2, ls='-.',  label='True m2')
-    #plt.fill_between(m2val, numpy.percentile(ratem2, 95., axis=0) / m2val, numpy.percentile(ratem2, 5., axis=0) / m2val, color='C1', alpha=0.2)
-    plt.ylim(3.e-4, 10.)
-    plt.xlim(3., 100.)
-    plt.grid(True)
-    plt.legend(loc='upper right', fontsize='large')
-    plt.ylabel(r'$p(m_1)$', size='large')
-    plt.xlabel(r' $m_1\,[M_\odot]$', size='large')
-    plt.savefig(pathplot+'combined_OneDmass_average_with_true.png', bbox_inches='tight')
-    plt.close()
 
 def corre_tom(series, before_use_buf=5, bufsize=100, quantity='bandwidths', log=True, pathplot='./'):
     """
