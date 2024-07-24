@@ -79,7 +79,7 @@ norm1 = BoundaryNorm(levels, ncolors=cmap_red_yellow.N)
 contour1 = plt.contourf(grid_x1, grid_y1, grid_z1, levels=levels, cmap=cmap_red_yellow, norm=norm1, alpha=0.99)
 # Add contour lines
 contour_lines1 = plt.contour(grid_x1, grid_y1, grid_z1, levels=[1e-4, 1e-3, 1e-2, 1e-1, 0.9, 0.95, 1.0], colors='purple', linewidths=0.5)
-#plt.clabel(contour_lines1, fmt='%1.0e', colors='black')
+plt.clabel(contour_lines1, fmt='%1.0e', colors='black')
 
 # Second dataset contourf plot
 #norm2 = BoundaryNorm(levels, ncolors=cmap_blue_yellow.N)
@@ -89,8 +89,8 @@ contour_lines1 = plt.contour(grid_x1, grid_y1, grid_z1, levels=[1e-4, 1e-3, 1e-2
 #plt.clabel(contour_lines2, fmt='%1.0e', colors='black')
 
 # Add a colorbar with fixed ticks
-#cbar = plt.colorbar(contour1, ticks=[1e-4, 1e-3, 1e-2, 1e-1, 0.9])
-#cbar.set_label('Detection Probability (pdet)')
+cbar = plt.colorbar(contour1, ticks=[1e-4, 1e-3, 1e-2, 1e-1, 0.9])
+cbar.set_label(r'$p_{det}$')
 
 plt.text(2.9, 10, r'$SNR=10$', fontsize=20, color='red', rotation='horizontal')#, transform=plt.gca().transAxes)
 plt.text(3.0, 15, r'$SNR=8$', fontsize=20, color='blue', rotation='horizontal')#, transform=plt.gca().transAxes)
