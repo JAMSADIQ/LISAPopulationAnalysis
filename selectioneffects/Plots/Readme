@@ -1,1 +1,3 @@
-Here are plots for SNR for some events as function of mass ratio anb redshift
+Here are scripts used to get pdet or SNR using lisabeta.
+there are two data files which given fix Mz and DL/z used fixed q = 5( 0.2) and zero spins with 1000MC on extrinsic angles and get pdet based on SNR theshold of 8 or 10
+
