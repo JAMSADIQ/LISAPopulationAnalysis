@@ -1,1 +1,3 @@
-Here are histograms of SNR for all events with posterior-parameters and using the json based waveformparameters. The events-tag with true snr are in .dat file 
+Here are histograms of SNR for all events with posterior-parameters and using the json based waveformparameters. The events-tag with true snr are in .dat file
+
+There are also plots of SNR  for  mass ratio and redshift or DL values of an events samples
