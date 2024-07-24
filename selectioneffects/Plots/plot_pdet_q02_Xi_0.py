@@ -92,8 +92,8 @@ plt.clabel(contour_lines1, fmt='%1.0e', colors='black')
 cbar = plt.colorbar(contour1, ticks=[1e-4, 1e-3, 1e-2, 1e-1, 0.9])
 cbar.set_label(r'$p_{det}$')
 
-plt.text(2.9, 10, r'$SNR=10$', fontsize=20, color='red', rotation='horizontal')#, transform=plt.gca().transAxes)
-plt.text(3.0, 15, r'$SNR=8$', fontsize=20, color='blue', rotation='horizontal')#, transform=plt.gca().transAxes)
+plt.text(2.6, 11, r'$SNR=10$', fontsize=20, color='red', rotation='horizontal')#, transform=plt.gca().transAxes)
+plt.text(2.8, 16, r'$SNR=8$', fontsize=20, color='blue', rotation='horizontal')#, transform=plt.gca().transAxes)
 #plt.text(3, 14, 'SNR8', horizontalalignment='center', verticalalignment='center', fontsize=14, color='blue', transform=plt.gca().transAxes, alpha=0.6)
 # Set labels and title
 plt.xlabel(r'$Log10(M_z)$')
