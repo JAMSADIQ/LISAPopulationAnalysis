@@ -99,7 +99,7 @@ plt.text(3.0, 15, r'$SNR=8$', fontsize=20, color='blue', rotation='horizontal')#
 plt.xlabel(r'$Log10(M_z)$')
 plt.ylabel(r'$Redshift (z)$')
 plt.title(r'$p_{det} \,\,with \, \,  q=0.2, \vec{\chi} = 0$', fontsize=18)
-
+plt.savefig('Pdet_fixedq_spinszero.png')
 # Show plot
 plt.show()
 
