@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.stats import gaussian_kde
+import utils_awkde as u_awkde
 
 def generate_power_law_data(size, exponent=2.0, xmin=1, xmax=100):
     """Generate data following a truncated power law distribution."""
@@ -54,10 +54,10 @@ uniform_data = generate_uniform_data(size=3000, low=2, high=100)
 
 # Function to plot KDE
 def plot_kde(data, label, ax):
-    kde = gaussian_kde(data, bw_method='scott')
     print(label, min(data), max(data))
     x_range = np.linspace(min(data), max(data), 1000)
-    ax.plot(x_range, kde(x_range), label=label)
+    kde_vals = u_awkde.kde_awkde(data, x_range, global_bandwidth='scott', alpha=0.0) #bw silverman, alpha =0.5
+    ax.plot(x_range, kde_vals, label=label)
     ax.set_title(label)
     ax.set_xlabel("x")
     ax.set_ylabel("pdf(x)")
