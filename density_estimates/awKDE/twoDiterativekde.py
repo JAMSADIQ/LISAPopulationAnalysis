@@ -6,7 +6,6 @@ import json
 import h5py as h5
 import scipy
 from scipy.interpolate import RegularGridInterpolator
-
 import sys
 
 import utils_awkde as u_awkde
@@ -18,10 +17,9 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--datafilename',  default='combine_popIIIyear92_events.hdf',help='h5 file containing N samples for m1for all gw bbh event')
 ### For KDE in log parameter we need to add --logkde 
 parser.add_argument('--logkde', action='store_true',help='if True make KDE in log params but results will be in onlog')
-bwchoices= np.logspace(-1, 0, 20).tolist() 
+bwchoices= np.logspace(-2, 0, 15).tolist() 
 parser.add_argument('--bw-grid', default= bwchoices, nargs='+', help='grid of choices of global bandwidth')
 alphachoices = np.linspace(0., 1.0, 11).tolist()
-#[0.2, 0.4, 0.6, 0.8, 1.0]
 parser.add_argument('--alpha-grid', nargs="+", default=alphachoices, type=float, help='grid of choices of sensitivity parameter alpha for local bandwidth')
 
 # limits on KDE evulation: 
@@ -39,9 +37,6 @@ parser.add_argument('--pathtag', default='re-weight-bootstrap_', help='public_ht
 parser.add_argument('--output-filename', default='output_data_', help='write a proper name of output hdf files based on analysis', type=str)
 opts = parser.parse_args()
 
-
-
-###### Gaussian samples for each event and reweight them with fpop prob
 
 #############for ln paramereter we need these
 def prior_factor_function(samples):
@@ -63,8 +58,7 @@ def prior_factor_function(samples):
     return factor
 
 
-###### reweighting 
-
+###### reweighting  methods ####################################
 def get_random_sample(original_samples, bootstrap='poisson'):
     """without reweighting"""
     rng = np.random.default_rng()
@@ -161,6 +155,7 @@ for event_name in hdf_file.keys():
     data_Mz = data[0]
     data_z = data[1]
     data_pdet = data[2]
+    # remove below if there is no issue with z >20
     indices = np.argwhere(data_z <= 20.0).flatten()
     data_z = data_z[indices]
     dataMz = data_Mz[indices]
@@ -188,9 +183,7 @@ flat_Mz_all = np.concatenate(sampleslists_Mz).flatten()#np.array(sampleslists_Mz
 flat_z_all = np.concatenate(sampleslists_z).flatten()
 flat_pdet_all = np.concatenate(sampleslists_pdet).flatten()
 
-Mz_eval = np.logspace(2, 10, 200)[:, np.newaxis]
 Mz_grid = np.logspace(2, 10, 200)
-z_eval = np.logspace(-1, np.log10(20), 200)[:, np.newaxis]
 z_grid = np.logspace(-1, np.log10(20), 200)
 
 ##### We will use Weighted KDE code here for 1/pdet for weights rather awkde
@@ -204,15 +197,13 @@ print("total samples", len(flat_pdet_all), len(flat_z_all), all_samples.shape)
 alphagrid = opts.alpha_grid #
 bwgrid = opts.bw_grid
 ##First median samples KDE
-current_kde, errorkdeval, errorbBW, erroraALP = u_awkde.get_Ndimkde(sample, grid_pts, alphagrid, bwgrid, ret_kde=True)
+current_kde, errorkdeval, errorbBW, erroraALP = u_awkde.kde_twoD_with_do_optimize(sample, grid_pts, bwgrid, alphagrid, ret_kde=True, optimize_method='loocv')
 ZZ = errorkdeval.reshape(XX.shape)
 #priorfactor
 
-
-
 u_plot.new2DKDE(XX, YY,  ZZ, np.log10(median_arr_Mz), median_arr_z, median_arr_pdet, iterN=0, title='KDEmedian', saveplot=True)
 ############## All data KDE #############################
-ZZall = u_awkde.N_dim_KDE_awkde(all_samples, grid_pts, alp=erroraALP, gl_bandwidth=errorbBW, ret_kde=False)
+ZZall = u_awkde.kde_awkde(all_samples, grid_pts, global_bandwidth=errorbBW, alpha=erroraALP, ret_kde=False)
 ZZall = ZZall.reshape(XX.shape)
 
 u_plot.new2DKDE(XX, YY,  ZZall, np.log10(flat_Mz_all), flat_z_all, flat_pdet_all, iterN=1, saveplot=True, title='KDEall')
@@ -251,7 +242,8 @@ for i in range(1000+discard):
         rwsamples.append(rwsample)
     rwsamples = np.concatenate(rwsamples)
     print("iter", i, "  totalsamples = ", len(rwsamples))
-    current_kde, current_kdeval, shiftedbw, shiftedalp = u_awkde.get_Ndimkde(np.array(rwsamples), grid_pts, alphagrid, bwgrid, ret_kde=True)
+    current_kde, current_kdeval, shiftedbw, shiftedalp =  u_awkde.kde_twoD_with_do_optimize(rwsamples, grid_pts, bwgrid, alphagrid, ret_kde=True, optimize_method='loocv')
+    u_awkde.get_Ndimkde(np.array(rwsamples), grid_pts, alphagrid, bwgrid, ret_kde=True)
     current_kdeval = current_kdeval.reshape(XX.shape)
     kdevalslist.append(current_kdeval)
     iterbwlist.append(shiftedbw)
