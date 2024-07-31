@@ -6,175 +6,185 @@ import numpy as np
 import operator
 import scipy.stats as st
 
-######################## One dimensional case ########################
-def kde_awkde(x, x_grid, alp=0.5, gl_bandwidth='silverman', ret_kde=False):
-    """Kernel Density Estimation with awkde 
-    inputs:
-      x = training data: array-like, shape (n_samples, n_features)
-      for one dimensional case use x[:, newaxis] 
-      x_grid = testing data must be array-like, shape (n_samples, n_features)
-      alp = smoothing factor for local bw
-      gl_bandwidth = global bw for kde
-      kwargs:
-       ret_kde optional 
-        if True kde will be output with estimated kde-values 
+################################################
+def kde_awkde(x, x_grid, global_bandwidth='silverman', alpha=0.5, ret_kde=False):
     """
-    kde = GaussianKDE(glob_bw=gl_bandwidth, alpha=alp, diag_cov=True)
-    kde.fit(x[:, np.newaxis])
-    if isinstance(x_grid, (list, tuple, np.ndarray)) == False:
-        y = kde.predict(x_grid)
-    else:
-        y = kde.predict(x_grid[:, np.newaxis])
+    Kernel Density Estimation with awkde.
 
-    if ret_kde == True:
-        return kde, y
-    return y
-
-
-def loocv_awkde(sample, bwchoice, alphachoice):
+    Parameters:
+    x (array-like): Training data of shape (n_samples, n_features).
+                    For the one-dimensional case, use x[:, np.newaxis].
+    x_grid (array-like): Testing data, must be of shape (n_samples, n_features).
+    global_bandwidth (str or float, optional): Global bandwidth for KDE. 
+        Default is 'silverman'.
+    alpha (float, optional): Smoothing factor for local bandwidth. 
+        Default is 0.5.
+    ret_kde (bool, optional): If True, the function will return the KDE object
+        along with estimated KDE values.
+    
+    Returns:
+    array or tuple: Estimated KDE values or a tuple (kde, y) if ret_kde is True.
+    
+    Raises:
+    ValueError: If the input data does not have the required shape.
     """
-    Use specific choice of alpha and bw 
-    we use Leave one out cross validation
-    on Awkde kde fit
-    LOOCV:
-    we train n-1 of the n sample leaving one
-    in n iterations and compute kde fit on 
-    n-1 samples. For each iteration we  use this kde 
-    to predict the missed ith sample of ith iteration.
-    We take log of this predicted value and
-    sum these all values (N values if len Sample = N)
-    We output this sum.
-    fom  = log(predict(miss value)) is called 
-    a figure of merit.
-    """
-    if bwchoice not in ['silverman', 'scott']:
-        bwchoice = float(bwchoice) #bwchoice.astype(np.float) #for list
-    fom = 0.0
-    for i in range(len(sample)):
-        leave_one_sample, miss_sample = np.delete(sample, i), sample[i]
-        y = kde_awkde(leave_one_sample, miss_sample, alp=alphachoice, gl_bandwidth=bwchoice)
-        #fom += np.log(y)  # for 1D case
-        fom += np.log(np.mean(y))
-    return fom
+    if len(x.shape) == 1:
+        # Transform to a 2D array with shape (len, 1)
+        x = x[:, np.newaxis]
+    if len(x_grid.shape) == 1:
+        x_grid = x_grid[:, np.newaxis]
 
-
-def get_optimized_bw_kde_using_loocv(sample, alphagrid, bwgrid, fomplot=False):
-    """ 
-    Given grid of alpha and bw choice it will get 
-    figure of merit from loocv_awkde function for each choice
-    return a dictionary of FOM:  FOM[(bw, alpha)]
-    and  optimal param and FOM at these params:  optbw , optalpha, FOM[(optbw , optalpha)] 
-    """
-    FOM= {}
-    for gbw in bwgrid:
-        for alphavals in alphagrid:
-            FOM[(gbw, alphavals)] = loocv_awkde(sample, gbw, alphavals)
-    optval = max(FOM.items(), key=operator.itemgetter(1))[0]
-    optbw, optalpha  = optval[0], optval[1]
-    maxFOM = max(FOM) 
-
-    return  FOM, optbw, optalpha, maxFOM
-
-
-def get_kde(samplevalues, x_gridvalues, alphagrid, bwgrid, ret_kde=False):
-    """
-    inputs: samplevalues, x_gridvalues, alphagrid, bwgrid 
-        make sure order of alpha and bwds
-    return: kdeval, optbw, optalpha
-      make sure of order of outputs
-    """
-    FOMdict, optbw, optalpha, maxFOM = get_optimized_bw_kde_using_loocv(samplevalues,
-    alphagrid, bwgrid)
-    print("bw = ", optbw)
-    if ret_kde:
-        kde, kdeval = kde_awkde(samplevalues, x_gridvalues, alp=optalpha, gl_bandwidth=optbw, ret_kde=ret_kde)
-        return kde, kdeval, optbw, optalpha
-    kdeval = kde_awkde(samplevalues, x_gridvalues, alp=optalpha, gl_bandwidth=optbw)
-    return kdeval, optbw, optalpha
-
-################################################################################
-#######for Two(multi)D KDE
-def N_dim_KDE_awkde(x, x_grid, alp=0.5, gl_bandwidth='silverman', ret_kde=False):
-    """Kernel Density Estimation with awkde only with Gaussian Kernel
-
-    ret_kde optional 
-      if True kde will be output with estimated kde-values 
-    """
-    kde = GaussianKDE(glob_bw=gl_bandwidth, alpha=alp, diag_cov=True)
+    if len(x.shape) !=2:
+        raise ValueError("data must have shape (n_samples, n_features).")
+    
+    kde = GaussianKDE(glob_bw=global_bandwidth, alpha=alpha, diag_cov=True)
+    #fit the kde
     kde.fit(x)
+    #evaluate the kde
     y = kde.predict(x_grid)
 
     if ret_kde == True:
         return kde, y
-
     return y
 
 
-def twoD_loocv_awkde(sample, bwchoice, alphachoice):
+############# Cross validations log likelihood for figure of merit ################
+def loocv_awkde(sample, bwchoice, alphachoice):
     """
-    two dimsional case only changes are
-    np.delete(sample, i) to np.delete(sample, i,0)
-    np.log((y))  to  np.log(np.mean(y))
+    Perform Leave-One-Out Cross Validation (LOOCV) for Kernel Density Estimation (KDE) using awkde.
+
+    This function calculates the figure of merit (FoM) as 
+        the sum of the log likelihoods of the left-out samples.
+    It uses Leave-One-Out cross validation to split the data, 
+    trains the KDE on the training subset, and evaluates it on the left-out sample.
+
+    Parameters:
+    sample (array-like): The data samples to be used for KDE, of shape (n_samples, n_features).
+    bwchoice (str or float): The choice of bandwidth for KDE. Accepts 'silverman', 'scott', or a float value.
+    alphachoice (float): The smoothing factor for local bandwidth in KDE.
+
+    Returns:
+    float: The sum of the log likelihoods of the left-out samples (figure of merit).
+
+    Raises:
+    ValueError: If the bandwidth choice is neither 'silverman', 'scott', nor a valid float value.
+
+    Example:
+    >>> sample = np.random.normal(size=(100, 2))
+    >>> bwchoice = 'silverman'
+    >>> alphachoice = 0.5
+    >>> fom = loocv_awkde(sample, bwchoice, alphachoice)
+    >>> print(fom)
     """
+    from sklearn.model_selection import LeaveOneOut
+    loo = LeaveOneOut()
     if bwchoice not in ['silverman', 'scott']:
         bwchoice = float(bwchoice) #bwchoice.astype(np.float) #for list
     fom = 0.0
-    for i in range(len(sample)):
-        leave_one_sample, miss_sample = np.delete(sample, i,0), sample[i]
-        y = N_dim_KDE_awkde(leave_one_sample, miss_sample, alp=alphachoice, gl_bandwidth=bwchoice)
-        fom += np.log(np.mean(y))
+    for train_index, test_index in loo.split(sample):
+        train_data, test_data = sample[train_index], sample[test_index]
+        y = kde_awkde(train_data, test_data, global_bandwidth=bwchoice, alpha=alphachoice, ret_kde=False)
+        fom += np.log(y)
+
     return fom
 
-def Ndim_get_optimized_bw_kde_using_loocv(sample, alphagrid, bwgrid, fomplot=False):
+def kfold_cv_awkde(sample, bwchoice, alphachoice, n_splits=5):
     """
-    inputs:
-      sample: [training set1, training set2]
-      bwchoice: choices of bandwidth for kde
-      alphachoice: choice of kde parameter [0.1, 1]
-      kwargs:fomplot if True plot FOM as function of alpha and bandwidth
-   output:
-      returns optimized alpha, bandwidth, and maxFigureOfMerit value
-      remember the order
-      optional plot of fom as function of alpha bandwidth
-    Explanation:
-    Given grid of alpha and bw choice it will get
-    figure of merit from loocv_awkde function for each choice
-    return a dictionary of FOM:  FOM[(bw, alpha)]
-    and  optimal param and FOM at these params:  optbw , optalpha, FOM[(optbw , optalpha)]
+    Perform K-Fold Cross Validation for Kernel Density Estimation (KDE) using awkde.
+
+    This function calculates the figure of merit (FoM) as
+        the total sum of the sum oflog likelihoods of the left-out samples
+        in k-fold split.
+    It uses K-Fold cross validation to split the data, 
+    trains the KDE on the training subset, and evaluates it on the testing samples.
+
+    Parameters:
+    sample (array-like): The data samples to be used for KDE, of shape (n_samples, n_features).
+    bwchoice (str or float): The choice of bandwidth for KDE. Accepts 'silverman', 'scott', or a float value.
+    alphachoice (float): The smoothing factor for local bandwidth in KDE.
+    n_splits (int, optional): The number of splits for K-Fold cross validation. Default is 5.
+
+    Returns:
+    float: Total sum of sums of the log likelihoods of the left-out samples (figure of merit) in k-fold splits.
+
+    Raises:
+    ValueError: If the bandwidth choice is neither 'silverman', 'scott', nor a valid float value.
+
+    Example:
+    >>> sample = np.random.normal(size=(100, 2))
+    >>> bwchoice = 'silverman'
+    >>> alphachoice = 0.5
+    >>> fom = kfold_cv_awkde(sample, bwchoice, alphachoice, n_splits=5)
+    >>> print(fom)
     """
-    FOM= {}
-    for gbw in bwgrid:
-        for alphavals in alphagrid:
-            FOM[(gbw, alphavals)] = twoD_loocv_awkde(sample, gbw, alphavals)
-    optval = max(FOM.items(), key=operator.itemgetter(1))[0]
-    optbw, optalpha  = optval[0], optval[1]
-    maxFOM = FOM[(optbw, optalpha)]
-    #print("optimizealpha, bw , FOM  = ", optalpha, optbw, maxFOM)
-    if fomplot==True:
+    from sklearn.model_selection import KFold
+    kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
+    fom = []
+    if bwchoice not in ['silverman', 'scott']:
+        bwchoice = float(bwchoice) 
+    for train_index, test_index in kf.split(sample):
+        train_data, test_data = sample[train_index], sample[test_index]
+        nonlog_kde_val = kde_awkde(train_data, test_data, global_bandwidth=bwchoice, alpha=alphachoice, ret_kde=False)
+        ### error if prob is 0 or negative raise error for it
+        if np.any(nonlog_kde_val <= 0):
+            raise ValueError("KDE estimate contains non-positive values, log will not work.")
+        #contains_neg_or_zero = np.where(nonlog_kde_val <= 0) [0]
+        #nonlog_kde_val[contains_neg_or_zero] = 1.0 #is this ok because log1=0?
+        #print("zero in estimate = ", contains_neg_or_zero) # Output: True
+        log_kde_val = np.log(nonlog_kde_val)
+        fom.append(log_kde_val.sum())
+    return sum(fom)
+
+
+def optimize_parameters(sample, bandwidth_options, alpha_options, method='loo_cv', fom_plot_name=None):
+    """
+    return opt bandwidth, opt alpha and fom value
+    """
+    best_params = {'bandwidth': None, 'alpha': None}
+    # Perform grid search
+    fom_grid = {}
+    for bandwidth in bandwidth_options:
+        for alpha in alpha_options:
+            if method == 'loo_cv':
+                fom_grid[(bandwidth, alpha)] = loocv_awkde(sample, bandwidth, alpha)
+            else:
+                fom_grid[(bandwidth, alpha)] = kfold_cv_awkde(sample, bandwidth, alpha)
+            print("bandwidth, alpha, score", bandwidth, alpha, fom_grid[(bandwidth, alpha)] )
+    optval = max(fom_grid, key=lambda k: fom_grid[k])
+    optbw, optalpha = optval[0], optval[1]
+    best_score = fom_grid[(optbw, optalpha)]
+    print("optbw, optalpha, fom_score", optbw, optalpha, best_score)
+    best_params = {'bandwidth': optbw, 'alpha': optalpha}
+
+    #plot
+    if fom_plot_name is not None:
+        import matplotlib.pyplot as plt
         fig = plt.figure(figsize=(12,8))
         ax = fig.add_subplot(111)
-        for bw in bwgrid:
-            FOMlist = [FOM[(bw, al)] for al in alphagrid]
+        for bw in bandwidth_options:
+            fom_list = [fom_grid[(bw, al)] for al in alpha_options]
             if bw not in ['silverman', 'scott']:
-                bw = float(bw) #bwchoice.astype(np.float) #for list
-                ax.plot(alphagrid, FOMlist, label='{0:.3f}'.format(bw))
+                ax.plot(alpha_options, fom_list, label='{0:.3f}'.format(float(bw)))
             else:
-                ax.plot(alphagrid, FOMlist, label='{}'.format(bw))
+                ax.plot(alpha_options, fom_list, label='{}'.format(bw))
         if optbw not in ['silverman', 'scott']:
-            ax.plot(optalpha, maxFOM, 'ko', linewidth=10, label=r'$\alpha={0:.3f}, bw= {1:.3f}$'.format(optalpha, optbw))
+            ax.plot(optalpha, best_score, 'ko', linewidth=10, label=r'$\alpha={0:.3f}, bw= {1:.3f}$'.format(optalpha, float(optbw)))
         else:
-            ax.plot(optalpha, maxFOM, 'ko', linewidth=10, label=r'$\alpha={0:.3f}, bw= {1}$'.format(optalpha, optbw))
+            ax.plot(optalpha, best_score, 'ko', linewidth=10, label=r'$\alpha={0:.3f}, bw= {1}$'.format(optalpha, optbw))
         ax.set_xlabel(r'$\alpha$', fontsize=18)
         ax.set_ylabel(r'$FOM$', fontsize=18)
         handles, labels = ax.get_legend_handles_labels()
-        lgd = ax.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.5,1.25), ncol =6, fancybox=True, shadow=True, fontsize=8)
-        #plt.ylim(maxFOM -5 , maxFOM +6)
-        plt.savefig(opts.pathplot+"FOMfortwoDsourcecase.png", bbox_extra_artists=(lgd, ), bbox_inches='tight')
+        lgd = ax.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.5, 1.25), ncol=6, fancybox=True, shadow=True, fontsize=8)
+        plt.tight_layout()
+        plt.savefig(fom_plot_name+".png", bbox_extra_artists=(lgd,), bbox_inches='tight')
         plt.close()
 
-    return optalpha, optbw, maxFOM
+    return  optbw, optalpha, best_score
 
-def get_Ndimkde(sample, xy_gridvalues, alphagrid, bwgrid, ret_kde=False, symmetry=False):
+
+
+######################## Specific for 2D case (if m1-m2 can swap for symmetry) ################
+def kde_twoD_with_do_optimize_use_symmetry(sample, xy_gridvalues, alphagrid, bwgrid, ret_kde=False, symmetry=False, optimize_method='loocv'):
     """
     inputs: samplevalues, x_gridvalues, alphagrid, bwgrid 
     make sure order of alpha and bwds
@@ -184,62 +194,21 @@ def get_Ndimkde(sample, xy_gridvalues, alphagrid, bwgrid, ret_kde=False, symmetr
     if symmetry == True:
         swap_sample = np.vstack((sample[:, 1], sample[:,0])).T
         sample = np.vstack((sample, swap_sample))
-    optalpha, optbw, maxFOM = Ndim_get_optimized_bw_kde_using_loocv(sample, alphagrid, bwgrid)
+    #do optimization over grid of values
+    optbw, optalpha, maxFOM = optimized_parameters(sample, bwgrid, alphagrid, method=optimize_method)
     print("alpha, bw = ", optalpha, optbw)
     #create grid valus for each reweight sample or use a fixed grid?
     if ret_kde:
-        kdeobject, kdeval = N_dim_KDE_awkde(sample, xy_gridvalues, alp=optalpha, gl_bandwidth=optbw, ret_kde=True)
+        kdeobject, kdeval = kde_awkde(sample, xy_gridvalues, global_bandwidth=optbw , alpha=optalpha, ret_kde=True)
         return kdeobject, kdeval, optbw, optalpha
-    kdeval = N_dim_KDE_awkde(sample, xy_gridvalues, alp=optalpha, gl_bandwidth=optbw)
+    kdeval = kde_awkde(sample, xy_gridvalues, global_bandwidth=optbw , alpha=optalpha)
     return kdeval, optbw, optalpha
 
 
-##### Extra function if needed
-def two_fold_crossvalidation(sample, bwchoice, alphachoice, n=5):
-    """
-    inputs:
-      samples: training set
-      bwchoice: choices of bwd for kde
-      alphachoice: choice of kde parameter [0.1, 1]
-
-    shuffle data into two equal samples
-    train in half and test on other half
-    in kde. 
-    try this 5 times and take average 
-    of those np.mean(combined 5 results)
-    fom = np.log(average)
-    """
-    #randomly select data    
-    random_data = np.random.choice(sample, len(sample))
-    if bwchoice not in ['silverman', 'scott']:
-        bwchoice = float(bwchoice)
-    fomlist =[]
-    for i in range(int(n)):
-        #split data into two subset of equal size [or almost equal (n+1, n) parts]
-        x_train, x_eval = np.array_split(random_data, 10)
-        y = kde_awkde(x_train, x_eval, alp=alphachoice, gl_bandwidth=bwchoice)
-        fomlist.append(np.log(y))
-    return np.mean(fomlist)
 
 
-def get_optimized_bw_kde_using_twofold(traindata, testdata, bwgrid, alphagrid):
-    """ 
-    Given grid of bw_choices 
-    use two-fold cross_validation to get opt_bw
-    figure of merit from two_fold_cv function for each choice
-    return optimal param: optbw , optalpha
-    """
-    FOM= {}
-    for gbw in bwgrid:
-        for alphavals in alphagrid:
-            FOM[(gbw, alphavals)] = two_fold_crossvalidation(traindata, gbw, alphavals)
-    optval = max(FOM.items(), key=operator.itemgetter(1))[0]
-    optbw, optalpha  = optval[0], optval[1]
-    #get kde using optimized alpha and optimized bw
-    kde_result = kde_awkde(traindata, testdata, alp=optalpha, gl_bandwidth=optbw)
-    return optbw, optalpha, kde_result
 
-
+#################### Extra work for error estimate #############################
 def get_delta_from_KDE_variance(traindata, testdata, optbw, optalpha, err=False):
     """
     get global_sigma  from kde code and coeff
@@ -256,7 +225,7 @@ def get_delta_from_KDE_variance(traindata, testdata, optbw, optalpha, err=False)
     print("global_sigma_val  = ", global_sigma_val)
     #to get 95 percentile confidence interval
     if err == True:
-        kde_result = kde_awkde(traindata, testdata, alp=optalpha, gl_bandwidth=optbw)
+        kde_result = kde_awkde(traindata, testdata, global_bandwidth=optbw, alpha=optalpha)
         coeff = kde.predict2(testdata[:, np.newaxis])
         sqcoeff = coeff**2
         cjmean = np.zeros(len(kde_result))
