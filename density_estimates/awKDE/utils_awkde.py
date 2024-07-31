@@ -184,7 +184,7 @@ def optimize_parameters(sample, bandwidth_options, alpha_options, method='loo_cv
 
 
 ######################## Specific for 2D case (if m1-m2 can swap for symmetry) ################
-def kde_twoD_with_do_optimize_use_symmetry(sample, xy_gridvalues, alphagrid, bwgrid, ret_kde=False, symmetry=False, optimize_method='loocv'):
+def kde_twoD_with_do_optimize(sample, xy_gridvalues, bwgrid, alphagrid, ret_kde=False, symmetry=False, optimize_method='loocv'):
     """
     inputs: samplevalues, x_gridvalues, alphagrid, bwgrid 
     make sure order of alpha and bwds
@@ -195,7 +195,7 @@ def kde_twoD_with_do_optimize_use_symmetry(sample, xy_gridvalues, alphagrid, bwg
         swap_sample = np.vstack((sample[:, 1], sample[:,0])).T
         sample = np.vstack((sample, swap_sample))
     #do optimization over grid of values
-    optbw, optalpha, maxFOM = optimized_parameters(sample, bwgrid, alphagrid, method=optimize_method)
+    optbw, optalpha, maxFOM = optimize_parameters(sample, bwgrid, alphagrid, method=optimize_method)
     print("alpha, bw = ", optalpha, optbw)
     #create grid valus for each reweight sample or use a fixed grid?
     if ret_kde:

@@ -61,10 +61,10 @@ x_grid_2d = np.array(np.meshgrid(x_grid_2d_x, x_grid_2d_y)).T.reshape(-1, 2)
 
 ################## using  for loop for fixed choices of bw, alpha
 # get optimized bw and alpha using loocv
-#bandwidth_options = ['scott', 'silverman', 0.1, 0.5, 1.0]
-#alpha_options = [0.0, 0.1, 0.3, 0.5, 1.0]
+bandwidth_options = ['scott', 'silverman', 0.1, 0.5, 1.0]
+alpha_options = [0.0, 0.1, 0.3, 0.5, 1.0]
 #optbw, optalp, _ = u_awkde.optimize_parameters(x_2d, bandwidth_options, alpha_options, method='loo_cv', fom_plot_name='showfom')
-
+kdeobject, y_2d, optbw, optalp = u_awkde.kde_twoD_with_do_optimize(x_2d, x_grid_2d, bandwidth_options, alpha_options, ret_kde=True, symmetry=False, optimize_method='loocv')
 ############### use scipy minimize, nelder-mead, many options to explore here
 def objective(params, sample, method='loocv', n_splits=5):
     bwchoice, alpha = params
@@ -80,18 +80,18 @@ def objective(params, sample, method='loocv', n_splits=5):
         fom = np.inf  # Assign a very high cost to invalid parameters
     return -fom  # We want to maximize the FoM, hence minimize its negative
 
-initial_params = [0.5, 0.1]
-#vounds has min tuple and max tuple for each params
-bounds = [(0.01, 0.0), (1.0, 1.0)]
-result = minimize(objective, initial_params, args=(x_2d, 'kfold', 4), method='Nelder-Mead')#, options={'xatol': 1e-7, 'disp': True})
-print(result)
-# Extract optimal alpha and bandwidth
-optbw, optalp = result.x
-print(f"Optimal alpha: {optalp}")
-print(f"Optimal bandwidth choice: {optbw}")
+#initial_params = [0.5, 0.1]
+#bounds has min tuple and max tuple for each params
+#bounds = [(0.01, 0.0), (1.0, 1.0)]
+#result = minimize(objective, initial_params, args=(x_2d, 'kfold', 4), method='Nelder-Mead')#, options={'xatol': 1e-7, 'disp': True})
+#print(result)
+## Extract optimal alpha and bandwidth
+#optbw, optalp = result.x
+#print(f"Optimal alpha: {optalp}")
+#print(f"Optimal bandwidth choice: {optbw}")
 
 # Apply KDE
-y_2d = u_awkde.kde_awkde(x_2d, x_grid_2d, global_bandwidth=optbw, alpha=optalp)
+#y_2d = u_awkde.kde_awkde(x_2d, x_grid_2d, global_bandwidth=optbw, alpha=optalp)
 
 # Reshape the output for plotting
 y_2d = y_2d.reshape(100, 100)
