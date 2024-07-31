@@ -26,18 +26,83 @@ def adaptive_weighted_kde(train_data, eval_data, alpha=0.0, bw=0.5, weights=None
 
 
 
+
+def standardize_data(train_data, eval_data):
+    """
+    get standardize data (divide data by its standard deviation)
+    use this for fit and evaluate kde
+    for better results?
+    """
+    #dvide the data by std
+    stds = np.std(train_data, axis=0)  # record the stds
+    std_train_data = np.zeros_like(train_data)
+    for dim, t_data in enumerate(train_data.T):
+        std_train_data[:, dim] = t_data/np.std(t_data)#train_data[:, dim]/np.std(train_data[:, dim]) 
+     
+    std_eval_data = np.zeros_like(eval_data)
+    for dim, data in enumerate(eval_data.T):
+        std_eval_data[:, dim] = eval_data[:, dim]/stds[dim]
+    return std_train_data, std_eval_data
+
+
+
+
 #tests this on simple OneD and twoD datacase
-data = np.random.randn(2**6)
-dataeval = np.linspace(np.min(data), np.max(data), 100)
-kdevals = adaptive_weighted_kde(data, dataeval, alpha=0.0, bw=0.5, weights=None)
-adkdevals = adaptive_weighted_kde(data, dataeval, alpha=1.0, bw=0.5, weights=None)
-halfadkdevals = adaptive_weighted_kde(data, dataeval, alpha=0.5, bw=0.5, weights=data**2)
-plt.plot(dataeval,  kdevals)
-plt.plot(dataeval,  adkdevals, label='adaptivefull')
-plt.plot(dataeval,  halfadkdevals, label='adaptive_weighted Squaredata')
-plt.legend()
+#data = np.random.randn(2**6)
+#dataeval = np.linspace(np.min(data), np.max(data), 100)
+#standardize data
+#data, dataeval = standardize_data(data, dataeval)
+#kdevals = adaptive_weighted_kde(data, dataeval, alpha=0.0, bw=0.5, weights=None)
+#adkdevals = adaptive_weighted_kde(data, dataeval, alpha=1.0, bw=0.5, weights=None)
+#halfadkdevals = adaptive_weighted_kde(data, dataeval, alpha=0.5, bw=0.5, weights=data**2)
+#plt.plot(dataeval,  kdevals, label='non-adaptive')
+#plt.plot(dataeval,  adkdevals, label='adaptivefull')
+#plt.plot(dataeval,  halfadkdevals, label='adaptive_weighted Squaredata')
+#plt.legend()
+#plt.show()
+
+
+allPEdata = np.loadtxt('../data_files/Lense_4_years_events_randomsamples_extracted_Mz_z_pdet_mfpdet.txt').T
+#allPEdata = np.loadtxt('/home/jsadiq/Research/E_awKDE/Github_repo/LISAPopulationAnalysis/density_estimates/data_files/Lense_4_years_events_randomsamples_medians_Mz_z.txt').T
+all_Mz = allPEdata[0]
+all_z = allPEdata[1]
+all_pdet = allPEdata[-1]
+data = np.vstack((np.log10(all_Mz), all_z)).T
+print(len(all_z))
+Mz_eval = np.logspace(2.5, 8, 200)
+log10Mz_eval = np.log10(Mz_eval)
+z_eval = np.logspace(-1, np.log10(20), 200)
+log10Mz_mesh, z_mesh = np.meshgrid(log10Mz_eval, z_eval)
+grid_pts = np.array(list(map(np.ravel, [log10Mz_mesh, z_mesh]))).T
+#standardize data
+stddata, stddataeval = standardize_data(data, grid_pts)
+adkdevals = adaptive_weighted_kde(data, grid_pts, alpha=1.0, bw=0.2, weights=1.0/all_pdet)
+adkdevals = adkdevals.reshape(z_mesh.shape)
+stdadkdevals = adaptive_weighted_kde(stddata, stddataeval, alpha=1.0, bw=0.2, weights=1.0/all_pdet)
+stdadkdevals = stdadkdevals.reshape(z_mesh.shape)
+
+# Create a figure with two subplots side by side
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
+# Plot pcolormesh with logarithmic normalization on the left subplot
+pcol = ax1.pcolormesh(log10Mz_mesh, z_mesh, adkdevals, norm=LogNorm(), shading='auto')
+fig.colorbar(pcol, ax=ax1, label='unweighted kde')
+ax1.contour(log10Mz_mesh, z_mesh, adkdevals, norm=LogNorm(), colors='black')
+ax1.set_title('without standardization')
+ax1.set_xlabel('Log10[Mz]', fontsize=16)
+ax1.set_ylabel('z', fontsize=16)
+
+pcol2 = ax2.pcolormesh(log10Mz_mesh, z_mesh, stdadkdevals, norm=LogNorm(), shading='auto')
+fig.colorbar(pcol2, ax=ax2, label='unweighted kde')
+ax2.set_title('with standardization')
+ax2.contour(log10Mz_mesh, z_mesh, stdadkdevals, norm=LogNorm(), colors='black')
+ax2.set_xlabel('Log10[Mz]', fontsize=16)
+ax2.set_ylabel('z', fontsize=16)
+# Display the plots
+plt.tight_layout()
 plt.show()
 
+
+quit()
 #Lets Try 2-d data
 
 # Create 2D data of shape (obs, dims)
