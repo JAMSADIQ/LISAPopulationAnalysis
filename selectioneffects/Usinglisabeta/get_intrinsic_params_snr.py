@@ -32,10 +32,10 @@ def get_zarray(DLarray_Mpc):
         zvals[it] = z_at_value(Planck15.luminosity_distance,  float(DLarray_Mpc[it])*units.Mpc)
     return zvals
 
-
+seconds_in_year = 3.154e+7 
 #specify these from Params files
-def get_optimalSNR(m1z, m2z, chi1, chi2, dist, waveform_params):
-    Deltat = 0.0
+def get_optimalSNR(m1z, m2z, chi1, chi2, dist, waveform_params, observation_time_years=1.0):
+    Deltat = np.random.uniform(0, observation_time_years)*seconds_in_year
     phi = np.random.uniform(low=-np.pi, high=np.pi)
     inc = np.arccos(np.random.uniform(low=-1., high=1.))
     lamBda = np.random.uniform(low=-np.pi, high=np.pi)
@@ -63,7 +63,7 @@ def get_optimalSNR(m1z, m2z, chi1, chi2, dist, waveform_params):
 ##############File like PE sampls json file with deltaT = 0 and tob = 1####
 with open('standardjsonfile.json', 'r') as filej:
         data = json.load(filej)
-waveform_params = data['waveform_params']
+waveform_params = data['waveform_params'] #make sure time to merger is 1 year 
 
 import pathlib
 #######combine all files for 100 years of Catalogs assuming there are .txt files for each (100) year 
