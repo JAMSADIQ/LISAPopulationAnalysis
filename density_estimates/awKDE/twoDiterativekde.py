@@ -7,19 +7,49 @@ import h5py as h5
 import scipy
 from scipy.interpolate import RegularGridInterpolator
 import sys
-
 import utils_awkde as u_awkde
 import utils_plot as u_plot
+from matplotlib import rcParams
+from matplotlib.colors import LogNorm
+import matplotlib.colors as colors
+from matplotlib import cm
+import matplotlib.ticker as ticker
+import matplotlib.gridspec as gridspec
+from matplotlib.lines import Line2D
+import matplotlib.ticker as ticker
+import matplotlib.patches
+from matplotlib.patches import Rectangle
+import glob
+import deepdish as dd
+
+rcParams["text.usetex"] = True
+rcParams["font.serif"] = "Computer Modern"
+rcParams["font.family"] = "Serif"
+rcParams["xtick.labelsize"]=18
+rcParams["ytick.labelsize"]=18
+rcParams["xtick.direction"]="in"
+rcParams["ytick.direction"]="in"
+rcParams["legend.fontsize"]=18
+rcParams["axes.labelsize"]=18
+rcParams["axes.grid"] = True
+rcParams["grid.color"] = 'grey'
+rcParams["grid.linewidth"] = 1.
+#rcParams["grid.linestyle"] = ':'
+rcParams["grid.alpha"] = 0.6
+
+
+
+
 
 
 #careful parsers 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('--datafilename',  default='combine_popIIIyear92_events.hdf',help='h5 file containing N samples for m1for all gw bbh event')
+parser.add_argument('--datafilename',  default='/home/jsadiq/Research/E_awKDE/CatalogLISA/lensedPopIII/json-params/samples/new_save_pdet_with_time_to_merger_randomize/SourceMasswithcorrection_time_SNRthreshold8.0combine_4years_lensed_events.hdf',help='h5 file containing N samples for m1for all gw bbh event')
 ### For KDE in log parameter we need to add --logkde 
 parser.add_argument('--logkde', action='store_true',help='if True make KDE in log params but results will be in onlog')
-bwchoices= np.logspace(-2, 0, 15).tolist() 
+bwchoices= np.logspace(-1.5, -0.5, 10).tolist() 
 parser.add_argument('--bw-grid', default= bwchoices, nargs='+', help='grid of choices of global bandwidth')
-alphachoices = np.linspace(0., 1.0, 11).tolist()
+alphachoices = [0.0, 0.1, 0.2, 0.4, 0.5, 0.6, 0.8, 1.0]#np.linspace(0., 1.0, 11).tolist()
 parser.add_argument('--alpha-grid', nargs="+", default=alphachoices, type=float, help='grid of choices of sensitivity parameter alpha for local bandwidth')
 
 # limits on KDE evulation: 
@@ -69,7 +99,7 @@ def get_random_sample(original_samples, bootstrap='poisson'):
     return reweighted_sample
 
 
-def get_reweighted_sample(original_samples, pdetvals, fpop_kde, bootstrap='poisson', prior_factor=prior_factor_function):
+def get_reweighted_sample(original_samples, pdetvals, fpop_kde, bootstrap='poisson', prior_factor=prior_factor_function, use_prior=False):
     """
     inputs 
     original_samples: list of mean of each event samples 
@@ -87,7 +117,10 @@ def get_reweighted_sample(original_samples, pdetvals, fpop_kde, bootstrap='poiss
     """
     # need to test this
     fkde_samples = fpop_kde.predict(original_samples)*1.0/pdetvals
-    frate_atsample = fkde_samples * prior_factor(original_samples) 
+    if use_prior == True:
+        frate_atsample = fkde_samples * prior_factor(original_samples) 
+    else:
+        frate_atsample = fkde_samples
     fpop_at_samples = frate_atsample/frate_atsample.sum() # normalize
     rng = np.random.default_rng()
     if bootstrap =='poisson':
@@ -98,7 +131,7 @@ def get_reweighted_sample(original_samples, pdetvals, fpop_kde, bootstrap='poiss
     return reweighted_sample
 
 
-def median_bufferkdelist_reweighted_samples(original_samples, original_pdet, Log10_Mz_val, z_val, kdelist, bootstrap_choice='poisson', prior_factor=prior_factor_function):
+def median_bufferkdelist_reweighted_samples(original_samples, original_pdet, Log10_Mz_val, z_val, kdelist, bootstrap_choice='poisson', prior_factor=prior_factor_function, use_prior=False):
     """
     using previous 100 ietrations pdf estimates (kde or rate)
     interpolate all of them to get values of KDE on
@@ -117,15 +150,14 @@ def median_bufferkdelist_reweighted_samples(original_samples, original_pdet, Log
     reweighted sample , pdet [none, one or array of values] based on poisson
     dsitrubution with mean 1.
     """
-    interpkdeval_list = []
-    for kde_values in kdelist:
-        interp = RegularGridInterpolator((Log10_Mz_val, z_val), kde_values, bounds_error=False, fill_value=0.0)
-        kde_interp_vals = interp(original_samples)
-        #apply prior factor
-        weighted_kde_interp_vals = kde_interp_vals*prior_factor(original_samples)*(1.0/original_pdet)
-        interpkdeval_list.append(weighted_kde_interp_vals)
-    mediankdevals = np.percentile(interpkdeval_list, 50, axis=0)
-    norm_mediankdevals = mediankdevals/sum(mediankdevals)
+    # get median and than make an interpolator
+    median_kde_values = np.percentile(kdelist, 50, axis=0)
+    #apply .T to check
+    interp = RegularGridInterpolator((Log10_Mz_val, z_val), median_kde_values.T, bounds_error=False, fill_value=0.0)
+    kde_interp_vals = interp(original_samples)*(1.0/original_pdet)#*prior_factor(original_samples)
+    if use_prior == True:
+        kde_interp_vals *= prior_factor(original_samples)
+    norm_mediankdevals = kde_interp_vals/sum(kde_interp_vals)
     rng = np.random.default_rng()
     if bootstrap_choice =='poisson':
         reweighted_sample = rng.choice(original_samples, np.random.poisson(1), p=norm_mediankdevals)
@@ -141,79 +173,95 @@ def normdata(dataV):
 ############################################################################
 
 hdf_file = h5.File(opts.datafilename, 'r')
-sampleslists_Mz = []
+sampleslists_M = []
 sampleslists_z = []
 sampleslists_pdet = []
-medianlist_Mz = []
+medianlist_M = []
 medianlist_z = []
 medianlist_pdet = []
 #print(hdf_file.keys())
 plt.figure()
+#print(len(hdf_file.keys()))
+#quit()
 for event_name in hdf_file.keys():
     data = hdf_file[event_name][...].T
     #print(data)
-    data_Mz = data[0]
+    data_M = data[0]
     data_z = data[1]
     data_pdet = data[2]
     # remove below if there is no issue with z >20
-    indices = np.argwhere(data_z <= 20.0).flatten()
+    indices = np.argwhere(data_z <= 20).flatten()
+    #print(event_name, data_M[indices], data_z[indices])
+    
+    #indices = np.argwhere(data_pdet >= 1e-3).flatten()
     data_z = data_z[indices]
-    dataMz = data_Mz[indices]
+    dataM = data_M[indices]
     datapdet = data_pdet[indices]
-    #plt.scatter(np.log10(dataMz), data_z, marker='+')
-    plt.scatter(np.log10(data[0]), data[1], marker='+')
-    sampleslists_Mz.append(dataMz)
+    #if np.max(data_z > 23.0) and np.max(np.log10(data_M) > 3):
+        #plt.figure()
+    plt.scatter(dataM, data_z, marker='+')
+        #plt.title(event_name)
+        #plt.show()
+    sampleslists_M.append(dataM)
     sampleslists_pdet.append(datapdet)
     sampleslists_z.append(data_z)
-    medianlist_Mz.append(np.median(dataMz))
+    medianlist_M.append(np.median(dataM))
     medianlist_z.append(np.median(data_z))
     medianlist_pdet.append(np.median(datapdet))
-plt.xlabel("Log10[M]")
-plt.ylabel("z")
+
+plt.xlabel(r"$M_\mathrm{source}\, [M_\odot]$", fontsize=20)
+plt.ylabel(r"$\mathrm{redshift}$", fontsize=20)
+plt.semilogx()
 plt.title("100 samples per event")
-plt.savefig("colored_samples_perevent_year92.png")
+plt.tight_layout()
+plt.savefig(opts.pathplot+"colored_samples_perevent_year92.png")
 plt.show()
 hdf_file.close()
-median_arr_Mz = np.array(medianlist_Mz)
+median_arr_M = np.array(medianlist_M)
 median_arr_z = np.array(medianlist_z)
 median_arr_pdet = np.array(medianlist_pdet)
-#sampleslists = np.vstack((np.array(sampleslists_Mz), np.array(sampleslists_z))).T
+#sampleslists = np.vstack((np.array(sampleslists_M), np.array(sampleslists_z))).T
 
-flat_Mz_all = np.concatenate(sampleslists_Mz).flatten()#np.array(sampleslists_Mz).flatten()
+flat_M_all = np.concatenate(sampleslists_M).flatten()#np.array(sampleslists_M).flatten()
 flat_z_all = np.concatenate(sampleslists_z).flatten()
 flat_pdet_all = np.concatenate(sampleslists_pdet).flatten()
 
-Mz_grid = np.logspace(2, 10, 200)
+M_grid = np.logspace(2., 9., 200)
 z_grid = np.logspace(-1, np.log10(20), 200)
 
-##### We will use Weighted KDE code here for 1/pdet for weights rather awkde
-XX, YY = np.meshgrid(np.log10(Mz_grid), z_grid)
+XX, YY = np.meshgrid(np.log10(M_grid), z_grid)
+nonlnXX, YY = np.meshgrid(M_grid, z_grid)
 grid_pts = np.array(list(map(np.ravel, [XX, YY]))).T
-sample = np.vstack((np.log10(median_arr_Mz) ,median_arr_z)).T
-all_samples = np.vstack((np.log10(flat_Mz_all), flat_z_all)).T
+sample = np.vstack((np.log10(median_arr_M) ,median_arr_z)).T
+all_samples = np.vstack((np.log10(flat_M_all), flat_z_all)).T
 print("total samples", len(flat_pdet_all), len(flat_z_all), all_samples.shape)
 
 ############### Code is expensive we got opt vals on median and save them below
 alphagrid = opts.alpha_grid #
 bwgrid = opts.bw_grid
 ##First median samples KDE
-current_kde, errorkdeval, errorbBW, erroraALP = u_awkde.kde_twoD_with_do_optimize(sample, grid_pts, bwgrid, alphagrid, ret_kde=True, optimize_method='loocv')
+#optimize_method default is loo_cv
+current_kde, errorkdeval, errorbBW, erroraALP = u_awkde.kde_twoD_with_do_optimize(sample, grid_pts, bwgrid, alphagrid, ret_kde=True, optimize_method='kfold_cv')
 ZZ = errorkdeval.reshape(XX.shape)
 #priorfactor
 
-u_plot.new2DKDE(XX, YY,  ZZ, np.log10(median_arr_Mz), median_arr_z, median_arr_pdet, iterN=0, title='KDEmedian', saveplot=True)
+u_plot.new2DKDE(nonlnXX, YY,  ZZ, median_arr_M, median_arr_z, iterN=0, saveplot=True, title='medianKDE')
 ############## All data KDE #############################
 ZZall = u_awkde.kde_awkde(all_samples, grid_pts, global_bandwidth=errorbBW, alpha=erroraALP, ret_kde=False)
 ZZall = ZZall.reshape(XX.shape)
 
-u_plot.new2DKDE(XX, YY,  ZZall, np.log10(flat_Mz_all), flat_z_all, flat_pdet_all, iterN=1, saveplot=True, title='KDEall')
+u_plot.new2DKDE(nonlnXX, YY,  ZZall, flat_M_all, flat_z_all, iterN=1, saveplot=True, title='KDEallsamples')
 
+#quit()
 ########## ASTROPHYSICAL catalog DATA
-data = np.loadtxt("intrinsicdata.dat").T
+#data = np.loadtxt("/home/jsadiq/Research/E_awKDE/CatalogLISA/lensedPopIII/combined_intrinsicdata100years_Mz_z_withPlanck_cosmology.dat").T
+data = np.loadtxt("/home/jsadiq/Research/E_awKDE/CatalogLISA/lensedPopIII/Corrected_for_timeofObsrandom_detected_events_given_intrinsic_events_with_4year_observations_for_lensed_data_Mz_z_based_on_optSNR_with_MC_on_extrinsic_params_with_threshold_SNR8.dat").T
 Theory_z = data[1]
 TheoryMtot = data[0]
-u_plot.ThreePlots(XX, YY, ZZall, TheoryMtot, Theory_z, plot_name='AllSamples')
-
+#We want source frame mass
+TheoryMtot /= (1.0 +  Theory_z)
+u_plot.ThreePlots(XX, YY, ZZall, ZZall, ZZall, nonlnXX, TheoryMtot, Theory_z, plot_name='AllSamples')
+#quit()
 
 #### Iterative weighted-KDE
 iterbwlist = []
@@ -221,46 +269,52 @@ iteralplist = []
 iterbwlist = []
 iteralplist = []
 
-frateh5 = h5.File(opts.outputfilename+'awkde_method_Data2DIterativeCase.hdf5', 'w')
-dsetxx = frateh5.create_dataset('LogMz', data=XX)
+frateh5 = h5.File(opts.output_filename+'awkde_method_Data2DIterativeCase.hdf5', 'w')
+dsetxx = frateh5.create_dataset('M', data=nonlnXX)
 dsetyy = frateh5.create_dataset('z', data=YY)
 
-discard = 100#opts.buffer_start   # how many iterations to discard default =5
-Nbuffer = 100#opts.buffer_interval #100 buffer [how many (x-numbers of ) previous iteration to use in reweighting with average of those past (x-numbers of ) iteration results
+discard = int(opts.buffer_start)   # how many iterations to discard default =5
+Nbuffer = int(opts.buffer_interval) #100 buffer [how many (x-numbers of ) previous iteration to use in reweighting with average of those past (x-numbers of ) iteration results
 kdevalslist = []
+TotalIterations = 100
 
-
-for i in range(1000+discard):
+for i in range(TotalIterations+discard):
     print("i - ", i)
     rwsamples = []
-    for sampleMz, sample_z,  samples_pdet in zip(sampleslists_Mz, sampleslists_z, sampleslists_pdet):
-        samples= np.vstack((np.log10(sampleMz), sample_z)).T
+    for sampleM, sample_z,  samples_pdet in zip(sampleslists_M, sampleslists_z, sampleslists_pdet):
+        samples= np.vstack((np.log10(sampleM), sample_z)).T
         if i < discard + Nbuffer :
             rwsample= get_reweighted_sample(samples, samples_pdet, current_kde, bootstrap=opts.bootstrap_option)
         else: 
-            rwsample= median_bufferkdelist_reweighted_samples(samples, samples_pdet, np.log10(Mz_grid), z_grid, kdevalslist[-100:], bootstrap_choice=opts.bootstrap_option)
+            rwsample= median_bufferkdelist_reweighted_samples(samples, samples_pdet, np.log10(M_grid), z_grid, kdevalslist[-Nbuffer:], bootstrap_choice=opts.bootstrap_option)
         rwsamples.append(rwsample)
     rwsamples = np.concatenate(rwsamples)
     print("iter", i, "  totalsamples = ", len(rwsamples))
-    current_kde, current_kdeval, shiftedbw, shiftedalp =  u_awkde.kde_twoD_with_do_optimize(rwsamples, grid_pts, bwgrid, alphagrid, ret_kde=True, optimize_method='loocv')
-    u_awkde.get_Ndimkde(np.array(rwsamples), grid_pts, alphagrid, bwgrid, ret_kde=True)
+    current_kde, current_kdeval, shiftedbw, shiftedalp =  u_awkde.kde_twoD_with_do_optimize(rwsamples, grid_pts, bwgrid, alphagrid, ret_kde=True, optimize_method='kfold_cv')
+    #u_awkde.get_Ndimkde(np.array(rwsamples), grid_pts, alphagrid, bwgrid, ret_kde=True)
     current_kdeval = current_kdeval.reshape(XX.shape)
     kdevalslist.append(current_kdeval)
     iterbwlist.append(shiftedbw)
     iteralplist.append(shiftedalp)
     frateh5.create_dataset('kde_iter{0:04}'.format(i), data=current_kdeval)
-    if  i > 0.0 and i %100 == 0:
-        u_plot.ThreePlots(XX, YY, np.percentile(kdevalslist[-100:], 50, axis=0),  TheoryMtot, Theory_z ,iternumber=i, plot_name='AwavergeKDE2D')
-        u_plot.histogram_datalist(iterbwlist[-100:], dataname='bw', pathplot='./', Iternumber=i)
-        u_plot.histogram_datalist(iteralplist[-100:], dataname='alpha', pathplot='./', Iternumber=i)
+    if  i > 0.0 and i %Nbuffer == 0:
+        medKDE = np.percentile(kdevalslist[-Nbuffer:], 50, axis=0)
+        KDE5th = np.percentile(kdevalslist[-Nbuffer:], 5, axis=0)
+        KDE95th = np.percentile(kdevalslist[-Nbuffer:], 95, axis=0)
+        u_plot.ThreePlots(XX, YY, medKDE, KDE95th, KDE5th, nonlnXX, TheoryMtot, Theory_z ,iternumber=i, plot_name='AvergeKDE2D')
+        u_plot.histogram_datalist(iterbwlist[-Nbuffer:], dataname='bw', pathplot='./', Iternumber=i)
+        u_plot.histogram_datalist(iteralplist[-Nbuffer:], dataname='alpha', pathplot='./', Iternumber=i)
     print(i, "step done ")
 frateh5.create_dataset('bandwidths', data=iterbwlist)
 frateh5.create_dataset('alphas', data=iteralplist)
 
 frateh5.close()
 # Calculate the average of all KDE after discard
-average_list = np.percentile(kdevalslist[100:], 50, axis=0) 
-u_plot.ThreePlots(XX, YY, average_list,  TheoryMtot, Theory_z, iternumber=1001, plot_name='Awcombined_all')
+average_list = np.percentile(kdevalslist[discard:], 50, axis=0) 
+pc5th_list = np.percentile(kdevalslist[discard:], 5, axis=0) 
+pc95th_list = np.percentile(kdevalslist[discard:], 95, axis=0) 
+
+u_plot.ThreePlots(XX, YY, average_list, pc95th_list, pc5th_list, nonlnXX, TheoryMtot, Theory_z, iternumber=1001, plot_name='Awcombined_all')
 
 
 #alpha bw plots
