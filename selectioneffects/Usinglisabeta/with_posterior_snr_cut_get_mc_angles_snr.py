@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 
 import scipy
 from scipy.special import i0, erf
-def Prob_matchfilter_SNR(optimal_SNR):
+def Prob_matchfilter_SNR(optimal_SNR, snr_threshold):
     """
     Calculate the pdet of match filter SNR given the optimal SNR.
 
@@ -27,7 +27,7 @@ def Prob_matchfilter_SNR(optimal_SNR):
     """
     # if list convert it to an array
     optimal_SNR = np.array(optimal_SNR)
-    return 0.5 * (1.0 + erf((-8.0 + optimal_SNR) / np.sqrt(2)))
+    return 0.5 * (1.0 + erf((-snr_threshold + optimal_SNR) / np.sqrt(2)))
 
 
 
@@ -56,7 +56,7 @@ import json
 import h5py as h5
 
 
-def get_mc_angles_snr(filetag, Nsample=200, MC_iters=1000):
+def get_mc_angles_snr(filetag, Nsample=200, MC_iters=1000, snr_threshold=8.0):
     """
     call json file for waveform, h5 file for intrinsic params
     compute 1000 snr at one pe sample
@@ -134,7 +134,7 @@ def get_mc_angles_snr(filetag, Nsample=200, MC_iters=1000):
 #                plt.ylabel("snr")
 #                plt.show()
             pdet = np.sum(np.array(snr_arr) > 8.0)/MC_iters
-            mf_pdet = sum(Prob_matchfilter_SNR(snr_arr))/len(snr_arr)
+            mf_pdet = sum(Prob_matchfilter_SNR(snr_arr, snr_threshold))/len(snr_arr)
             if pdet == 0.0:
                 print("indx, pdet, mfpdet, m1, m2, DL, lnlik, pos_snr = ", indices[k], pdet, mf_pdet, m1v[k], m2v[k], DLv[k], lnlik[k], posterior_snrv[k], )
             else:

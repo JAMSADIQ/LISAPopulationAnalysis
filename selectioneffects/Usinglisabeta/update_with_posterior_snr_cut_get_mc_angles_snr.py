@@ -18,9 +18,8 @@ import matplotlib.pyplot as plt
 import scipy
 from scipy.special import i0, erf
 ##############################SNR threshold is 8
-snr_threshold = 8.0
 
-def Prob_matchfilter_SNR(optimal_SNR, threshold_SNR=8.0):
+def Prob_matchfilter_SNR(optimal_SNR, threshold_SNR):
     """
     Calculate the pdet of match filter SNR given the optimal SNR.
 
@@ -57,7 +56,7 @@ def get_zarray(DLarray_Mpc):
 
 
 
-def get_mc_angles_snr(filetag, Nsample=200, MC_iters=1000):
+def get_mc_angles_snr(filetag, Nsample=200, MC_iters=1000, snr_threshold=8.0):
     """
     call json file for waveform, h5 file for intrinsic params
     compute 1000 snr at one pe sample
@@ -130,7 +129,7 @@ def get_mc_angles_snr(filetag, Nsample=200, MC_iters=1000):
             print(len(snr_arr))
             print("done index, max-minsnr", k,  np.max(snr_arr), np.min(snr_arr))
             pdet = np.sum(np.array(snr_arr) > snr_threshold)/MC_iters
-            mf_pdet = sum(Prob_matchfilter_SNR(snr_arr))/len(snr_arr)
+            mf_pdet = sum(Prob_matchfilter_SNR(snr_arr, snr_threshold))/len(snr_arr)
             if pdet == 0.0:
                 print("indx, pdet, mfpdet, m1, m2, DL, lnlik, pos_snr = ", indices[k], pdet, mf_pdet, m1v[k], m2v[k], DLv[k], lnlik[k], posterior_snrv[k], )
             else:
