@@ -1,26 +1,26 @@
 {
    "source_params": {
-      "M": 17242.256616,
-      "q": 1.0703439335372746,
-      "chi1": 0.9131345617875702,
-      "chi2": 0.7945924149673832,
-      "Deltat": 0.0,
-      "dist": 174725.0,
-      "inc": 2.922804293114405,
-      "phi": -1.849303310631142,
-      "lambda": -1.015821780065965,
-      "beta": 1.0802771358229457,
-      "psi": 1.224723572972617,
+      "M": 7723.650863881872,
+      "q": 1.5480713874496255,
+      "chi1": 0.9825321200098918,
+      "chi2": 0.9950070230400117,
+      "Deltat": 124053495.31315853,
+      "dist": 44419.680618286424,
+      "inc": 0.899758152506189,
+      "phi": -1.316772641202677,
+      "lambda": 0.405839912142981,
+      "beta": 0.9148130723416003,
+      "psi": 2.538784577816122,
       "Lframe": true
    },
    "waveform_params": {
       "minf": 1e-05,
       "maxf": 0.5,
-      "t0": 0.0,  
-      "timetomerger_max": 1.0,
+      "t0": 0.0,
+      "timetomerger_max": 4.0,
       "fend": null,
-      "tmin": null,
-      "tmax": null,
+      "tmin": 0.0,
+      "tmax": 4,
       "phiref": 0.0,
       "fref_for_phiref": 0.0,
       "tref": 0.0,
@@ -89,8 +89,8 @@
             1.0
          ],
          [
-            -1000.0,
-            1000.0
+            124052495.31315853,
+            124054495.31315853
          ],
          [
             100.0,
@@ -119,7 +119,7 @@
    },
    "run_params": {
       "out_dir": "./catalogs_recomputed/popIII/json-params/samples/",
-      "out_name": "catalog_1_yrs.txt.92.195",
+      "out_name": "catalog_1_yrs.txt.69.98",
       "sampler": "ptemcee",
       "sample_Lframe": true,
       "multimodal": true,
