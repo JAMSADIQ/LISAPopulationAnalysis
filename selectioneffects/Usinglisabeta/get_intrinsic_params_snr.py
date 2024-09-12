@@ -2,12 +2,13 @@
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
-
 import os
 import h5py as h5
 import itertools
 import copy
 import json
+
+################# For Lis-beta package ######################
 from tqdm import tqdm as tqdm
 import lisabeta
 import lisabeta.pyconstants as pyconstants
@@ -23,7 +24,6 @@ import lisabeta.lisa.lisa as lisa
 import lisabeta.utils.plotutils as plotutils
 
 import astropy
-from astropy import cosmology
 from astropy import units
 from astropy.cosmology import  z_at_value, Planck15
 def get_zarray(DLarray_Mpc):
@@ -32,7 +32,15 @@ def get_zarray(DLarray_Mpc):
         zvals[it] = z_at_value(Planck15.luminosity_distance,  float(DLarray_Mpc[it])*units.Mpc)
     return zvals
 
+def get_dLGpc(redshift):
+    dL = Planck15.luminosity_distance(redshift)
+    # Convert the result to Gpc defaults is Mpc
+    dL_Mpc = dL.to(u.Gpc)
+    return dL_Mpc.value
+
+
 seconds_in_year = 3.154e+7 
+
 #specify these from Params files
 def get_optimalSNR(m1z, m2z, chi1, chi2, dist, waveform_params, observation_time_years=1.0):
     Deltat = np.random.uniform(0, observation_time_years)*seconds_in_year
@@ -43,7 +51,7 @@ def get_optimalSNR(m1z, m2z, chi1, chi2, dist, waveform_params, observation_time
     psi = np.random.uniform(low=0., high=np.pi)
 
     params_base = {
-    "m1": m1z, # m1*(1+z)
+    "m1": m1z, # m1*(1+z) SNR calculation use redshifted Mass
     "m2": m2z, #m2*(1+z),
     "chi1": chi1,
     "chi2": chi2,
@@ -63,12 +71,11 @@ def get_optimalSNR(m1z, m2z, chi1, chi2, dist, waveform_params, observation_time
 ##############File like PE sampls json file with deltaT = 0 and tob = 1####
 with open('standardjsonfile.json', 'r') as filej:
         data = json.load(filej)
-waveform_params = data['waveform_params'] #make sure time to merger is 1 year 
-
+waveform_params = data['waveform_params'] #make sure time to merger is 1yr or4 years
 import pathlib
 #######combine all files for 100 years of Catalogs assuming there are .txt files for each (100) year 
 listfile = list(pathlib.Path('./').glob('*.txt.*'))
-snr_threshold = 8.0
+snr_threshold = 8.0# This is crucial
 snr_arr = []
 Mall = []
 zall = []

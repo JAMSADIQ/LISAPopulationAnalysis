@@ -19,9 +19,6 @@ rcParams["grid.color"] = 'grey'
 rcParams["grid.linewidth"] = 1.
 rcParams["grid.linestyle"] = ':'
 rcParams["grid.alpha"] = 0.8
-
-
-
 import os
 import h5py as h5
 import itertools
@@ -43,8 +40,7 @@ import lisabeta.lisa.lisa as lisa
 import lisabeta.utils.plotutils as plotutils
 
 import astropy
-from astropy import cosmology
-from astropy import units
+from astropy import cosmology, units
 from astropy.cosmology import  z_at_value, Planck15
 
 def get_zarray(DLarray_Mpc):
@@ -108,28 +104,28 @@ for ftag in ftags:
         #print(z_at_value(Planck15.luminosity_distance,  float(maxDL)*units.Mpc))
         lnlik = fh5['lnlike']
         print("min likelihood", np.min(lnlik))
-        qv = fh5['q'][...]g
-        chi1v = fh5['chi1'][...]g
-        chi2v = fh5['chi2'][...]g
-        Deltatv = fh5['Deltat'][...]g
-        betav =  fh5['beta'][...]g
-        incv =  fh5['inc'][...]g
-        psiv =  fh5['psi'][...]g
-        phiv =  fh5['phi'][...]g 
-        lambdav = fh5['lambda'][...]g
-        Mz_vals = Mvg
-        DL_vals =  DLvg
+        qv = fh5['q'][...]
+        chi1v = fh5['chi1'][...]
+        chi2v = fh5['chi2'][...]
+        Deltatv = fh5['Deltat'][...]
+        betav =  fh5['beta'][...]
+        incv =  fh5['inc'][...]
+        psiv =  fh5['psi'][...]
+        phiv =  fh5['phi'][...] 
+        lambdav = fh5['lambda'][...]
+        Mz_vals = Mv
+        DL_vals =  DLv
         #z_vals = get_zarray(DL_vals)
-        q_vals = qvg
+        q_vals = qv
     
-        Xi1_vals = chi1vg
-        Xi2_vals = chi2vg
-        Deltat_vals = Deltatvg
-        inc_vals = incvg
-        psi_vals = psivg
-        phi_vals = phivg
-        beta_vals = betavg
-        lambda_vals = lambdavg
+        Xi1_vals = chi1v
+        Xi2_vals = chi2v
+        Deltat_vals = Deltatv
+        inc_vals = incv
+        psi_vals = psiv
+        phi_vals = phiv
+        beta_vals = betav
+        lambda_vals = lambdav
     
         m1_vals = q_vals*Mz_vals / (1. + q_vals)
         m2_vals = Mz_vals / (1. + q_vals)
