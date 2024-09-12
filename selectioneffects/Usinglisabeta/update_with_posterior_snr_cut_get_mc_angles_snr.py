@@ -17,24 +17,22 @@ import matplotlib.pyplot as plt
 
 import scipy
 from scipy.special import i0, erf
-##############################SNR threshold is 8
+
 
 def Prob_matchfilter_SNR(optimal_SNR, threshold_SNR):
     """
-    Calculate the pdet of match filter SNR given the optimal SNR.
+    Calculate the probability that matched filter SNR will be above threshold
+    given the optimal SNR.
 
     Parameters:
     optimal_SNR (float): The optimal signal-to-noise ratio (SNR).
-    threshold_SNR (float): threshold for detection of signal default is 10
-    Formula  = 0.5 * (1.0 + erf((threshold_SNR - optimal_SNR) / np.sqrt(2)))
-
+    threshold_SNR (float): Threshold for detection of signal
+    
     Notes:
-    - The error function (erf) is imported from scipy.special module.
-    - The SNR value is used to compute the error probability using the given formula.
+    - The error function (erf) is imported from scipy.special
     """
     optimal_SNR = np.array(optimal_SNR)
     return 0.5 * (1.0 + erf((-threshold_SNR + optimal_SNR) / np.sqrt(2)))
-
 
 
 # Definition to randomize orientations
@@ -55,8 +53,7 @@ def get_zarray(DLarray_Mpc):
     return zvals
 
 
-
-def get_mc_angles_snr(filetag, Nsample=200, MC_iters=1000, snr_threshold=8.0):
+def get_mc_angles_snr(filetag, snr_threshold, Nsample=200, MC_iters=1000):
     """
     call json file for waveform, h5 file for intrinsic params
     compute 1000 snr at one pe sample
@@ -82,7 +79,7 @@ def get_mc_angles_snr(filetag, Nsample=200, MC_iters=1000, snr_threshold=8.0):
         Deltatv = fh5['Deltat'][...][cidx]
         posterior_snrv = posterior_snr[cidx] 
 
-        #Choose Nsamples 100 randomly
+        # Choose Nsamples random values
         indices = np.random.choice(np.arange(len(Mv)), int(Nsample))
         Mv = Mv[indices]
         DLv = DLv[indices]
@@ -140,9 +137,10 @@ def get_mc_angles_snr(filetag, Nsample=200, MC_iters=1000, snr_threshold=8.0):
     fh5.close()
     return 0
 
-#ftag are all files  tag like 49.101   in a  column file
-with open('ftag', 'r')as fileall:
+
+# ftag are all files tag like 49.101  in a column file
+with open('ftag', 'r') as fileall:
     ftags = [line.strip() for line in fileall.readlines()]
 for ftag in ftags:
-    get_mc_angles_snr(ftag, Nsample=100, MC_iters=1000)
+    get_mc_angles_snr(ftag, snr_threshold=8., Nsample=100, MC_iters=1000)
 
