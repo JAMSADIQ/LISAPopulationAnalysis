@@ -78,7 +78,7 @@ def OneDintegral(Xx, Yy, Zz):
     kde_Z = simpson(y=Zz, x=Xx, axis=1)
     return kde_Mz, kde_Z
 
-def  ThreePlots(XX, YY, ZZ, ZZ95, ZZ5, nonlogXX, TheoryMtot, Theory_z, logKDE=True,  iternumber=1, plot_name='median', Nobs=338, make_errorbars=False):
+def  ThreePlots(XX, YY, ZZ, ZZ95, ZZ5, nonlogXX, TheoryMtot, Theory_z, logKDE=True,  iternumber=1, plot_name='median', Nobs=338, make_errorbars=False, show_plot=False):
     """
     Plots for paper only detected KDEas
     """
@@ -113,8 +113,10 @@ def  ThreePlots(XX, YY, ZZ, ZZ95, ZZ5, nonlogXX, TheoryMtot, Theory_z, logKDE=Tr
     plt.tight_layout()
 
     plt.savefig(plot_name+"_IterativeKDE_plot_Iter{0}.png".format(iternumber))
-    #plt.close()
-    plt.show()
+    if show_plot==True:
+        plt.show()
+    else:
+        plt.close()
 
     fig, (ax2, ax1) = plt.subplots(1, 2, figsize=(10, 5))
     c, bins = np.histogram(np.log10(TheoryMtot), bins=25, density=True)
@@ -142,8 +144,10 @@ def  ThreePlots(XX, YY, ZZ, ZZ95, ZZ5, nonlogXX, TheoryMtot, Theory_z, logKDE=Tr
     fig.suptitle('popIII model', fontsize=16)
     plt.tight_layout()
     plt.savefig(plot_name+"_withHistIterativeKDE_plot_Iter{0}.png".format(iternumber))
-    plt.show()
-    #plt.close()
+    if show_plot==True:
+        plt.show()
+    else:
+        plt.close()
     return  0
 
 def compare_twodimensionalKDEPlot(XX, YY, ZZ, ZZ2, title1='instrinsic KDE', title2='PE KDE', plot_name='compareKDE'):
@@ -180,7 +184,7 @@ def compare_twodimensionalKDEPlot(XX, YY, ZZ, ZZ2, title1='instrinsic KDE', titl
 
 
 
-def new2DKDE(XX, YY,  ZZ, Mv, z, iterN=0, saveplot=False, title='KDE'):
+def new2DKDE(XX, YY,  ZZ, Mv, z, iterN=0, saveplot=False, title='KDE', show_plot=False):
     plt.figure(figsize=(8, 6))
     contourlevels = np.logspace(-5, 0, 11)[:]
     # Plotting pcolormesh and contour
@@ -209,8 +213,10 @@ def new2DKDE(XX, YY,  ZZ, Mv, z, iterN=0, saveplot=False, title='KDE'):
         plt.savefig(title+'kde_iter{0}.png'.format(iterN))
     else:
         print("notsaving")
-    plt.close()
-    #plt.show()
+    if show_plot== True:
+        plt.show()
+    else:
+        plt.close()
     return 0
 
 
