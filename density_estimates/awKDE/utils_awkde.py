@@ -120,14 +120,21 @@ def kfold_cv_awkde(sample, bwchoice, alphachoice, n_splits=5):
     from sklearn.model_selection import KFold
     kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
     fom = []
-    if bwchoice not in ['silverman', 'scott']:
-        bwchoice = float(bwchoice) 
+    #if bwchoice not in ['silverman', 'scott']:
+    #    bwchoice = float(bwchoice) 
     for train_index, test_index in kf.split(sample):
         train_data, test_data = sample[train_index], sample[test_index]
+        #print(test_data)
         nonlog_kde_val = kde_awkde(train_data, test_data, global_bandwidth=bwchoice, alpha=alphachoice, ret_kde=False)
+        print("bw, alpha", bwchoice, alphachoice)
         ### error if prob is 0 or negative raise error for it
-        if np.any(nonlog_kde_val <= 0):
-            raise ValueError("KDE estimate contains non-positive values, log will not work.")
+        #for i in range(len(nonlog_kde_val)):
+        #    if nonlog_kde_val[i] <= 0:
+        #        print(i,  test_data[i], nonlog_kde_val[i])
+                #quit()
+        #if np.any(nonlog_kde_val <= 0):
+        #    raise ValueError("KDE estimate contains non-positive values, log will not work.")
+
         #contains_neg_or_zero = np.where(nonlog_kde_val <= 0) [0]
         #nonlog_kde_val[contains_neg_or_zero] = 1.0 #is this ok because log1=0?
         #print("zero in estimate = ", contains_neg_or_zero) # Output: True
@@ -196,6 +203,7 @@ def kde_twoD_with_do_optimize(sample, xy_gridvalues, bwgrid, alphagrid, ret_kde=
         sample = np.vstack((sample, swap_sample))
     #do optimization over grid of values
     optbw, optalpha, maxFOM = optimize_parameters(sample, bwgrid, alphagrid, method=optimize_method)
+    optbw = float(optbw)
     print("alpha, bw = ", optalpha, optbw)
     #create grid valus for each reweight sample or use a fixed grid?
     if ret_kde:
