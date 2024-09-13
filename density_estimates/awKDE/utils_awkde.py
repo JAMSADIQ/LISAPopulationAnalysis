@@ -84,6 +84,8 @@ def loocv_awkde(sample, bwchoice, alphachoice):
     for train_index, test_index in loo.split(sample):
         train_data, test_data = sample[train_index], sample[test_index]
         y = kde_awkde(train_data, test_data, global_bandwidth=bwchoice, alpha=alphachoice, ret_kde=False)
+        if y == 0  or y <= 0:
+            print(test_data, y)
         fom += np.log(y)
 
     return fom
