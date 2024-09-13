@@ -78,7 +78,7 @@ def OneDintegral(Xx, Yy, Zz):
     kde_Z = simpson(y=Zz, x=Xx, axis=1)
     return kde_Mz, kde_Z
 
-def  ThreePlots(XX, YY, ZZ, ZZ95, ZZ5, nonlogXX, TheoryMtot, Theory_z, logKDE=True,  iternumber=1, plot_name='median', Nobs=338, make_errorbars=False, show_plot=False):
+def  ThreePlots(XX, YY, ZZ, ZZ95, ZZ5, nonlogXX, TheoryMtot, Theory_z, logKDE=True,  iternumber=1, plot_name='median', Nobs=338, make_errorbars=False, show_plot=False,  pathplot='./'):
     """
     Plots for paper only detected KDEas
     """
@@ -112,7 +112,7 @@ def  ThreePlots(XX, YY, ZZ, ZZ95, ZZ5, nonlogXX, TheoryMtot, Theory_z, logKDE=Tr
     #axs[0, 0].axis('off')
     plt.tight_layout()
 
-    plt.savefig(plot_name+"_IterativeKDE_plot_Iter{0}.png".format(iternumber))
+    plt.savefig(pathplot+plot_name+"_IterativeKDE_plot_Iter{0}.png".format(iternumber))
     if show_plot==True:
         plt.show()
     else:
@@ -143,7 +143,7 @@ def  ThreePlots(XX, YY, ZZ, ZZ95, ZZ5, nonlogXX, TheoryMtot, Theory_z, logKDE=Tr
     ax1.legend(fontsize=16)
     fig.suptitle('popIII model', fontsize=16)
     plt.tight_layout()
-    plt.savefig(plot_name+"_withHistIterativeKDE_plot_Iter{0}.png".format(iternumber))
+    plt.savefig(pathplot+plot_name+"_withHistIterativeKDE_plot_Iter{0}.png".format(iternumber))
     if show_plot==True:
         plt.show()
     else:
@@ -178,13 +178,13 @@ def compare_twodimensionalKDEPlot(XX, YY, ZZ, ZZ2, title1='instrinsic KDE', titl
     #fig.suptitle("Compare KDEs", fontsize=16)
     ax1.set_title("detected-KDE", fontsize=16)
     fig.tight_layout()
-    #plt.savefig(plot_name+'.png')
+    plt.savefig(pathplot+plot_name+'.png')
     plt.show()
     return 0
 
 
 
-def new2DKDE(XX, YY,  ZZ, Mv, z, iterN=0, saveplot=False, title='KDE', show_plot=False):
+def new2DKDE(XX, YY,  ZZ, Mv, z, iterN=0, saveplot=False, title='KDE', show_plot=False, pathplot='./'):
     plt.figure(figsize=(8, 6))
     contourlevels = np.logspace(-5, 0, 11)[:]
     # Plotting pcolormesh and contour
@@ -210,7 +210,7 @@ def new2DKDE(XX, YY,  ZZ, Mv, z, iterN=0, saveplot=False, title='KDE', show_plot
     plt.tight_layout()
     plt.suptitle("PopIII Model")
     if saveplot==True:
-        plt.savefig(title+'kde_iter{0}.png'.format(iterN))
+        plt.savefig(pathplot+title+'kde_iter{0}.png'.format(iterN))
     else:
         print("notsaving")
     if show_plot== True:

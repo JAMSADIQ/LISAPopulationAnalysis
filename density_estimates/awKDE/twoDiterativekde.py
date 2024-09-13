@@ -19,9 +19,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--datafilename',  default='/home/jsadiq/Research/E_awKDE/CatalogLISA/lensedPopIII/json-params/samples/new_save_pdet_with_time_to_merger_randomize/SourceMasswithcorrection_time_SNRthreshold8.0combine_4years_lensed_events.hdf',help='h5 file containing N samples for m1for all gw bbh event')
 
 ### For KDE in log parameter we need to add --logkde 
-parser.add_argument('--logkde', action='store_true',help='if True make KDE in log params but results will be in onlog')
 bwchoices= np.logspace(-1.5, -0.5, 10).tolist() 
-
 parser.add_argument('--bw-grid', default= bwchoices, nargs='+', help='grid of choices of global bandwidth')
 alphachoices = [0.0, 0.1, 0.2, 0.4, 0.5, 0.6, 0.8, 1.0]#np.linspace(0., 1.0, 11).tolist()
 parser.add_argument('--alpha-grid', nargs="+", default=alphachoices, type=float, help='grid of choices of sensitivity parameter alpha for local bandwidth')
@@ -31,14 +29,16 @@ parser.add_argument('--crossvalidationmethod', default='loo_cv', type=str, help=
 parser.add_argument('--reweightmethod', default='bufferkdevals', help='Only for gaussian sample shift method: we can reweight samples via buffered kdevals(bufferkdevals) or buffered kdeobjects (bufferkdeobject)', type=str)
 parser.add_argument('--reweight-sample-option', default='reweight', help='choose either "noreweight" or "reweight" if reweight use fpop prob to get reweight sample (one sample for no bootstrap or no or multiple samples for poisson)', type=str)
 parser.add_argument('--bootstrap-option', default='poisson', help='choose either "poisson" or "nopoisson" if None it will reweight based on fpop prob with single reweight sample for eaxh event', type=str)
+
 parser.add_argument('--logparam-prior', default=True, help='Prior factor in reweighting')
+parser.add_argument('--useprior', default=False, help='if we want to use non uniform prior factor effect. need some chenges in code')
+
 parser.add_argument('--buffer-start', default=100, type=int, help='start of buffer in reweighting.')
 parser.add_argument('--buffer-interval', default=100, type=int, help='interval of buffer that choose how many previous iteration resulkts we use in next iteration for reweighting.')
 parser.add_argument('--total-iterations', default=1000, type=int, help='number of  iteration in iterative reweighting.')
 
 #plots and saving data
 parser.add_argument('--methodtag', default='withpdetandpriorfactor', help='mention if we are using pdet factor and prior in reweighting', type=str)
-parser.add_argument('--pathplot', default='./', help='public_html path for plots', type=str)
 parser.add_argument('--pathplot', default='./', help='public_html path for plots', type=str)
 parser.add_argument('--output-filename', default='output_data_', help='write a proper name of output hdf files based on analysis', type=str)
 opts = parser.parse_args()
@@ -222,7 +222,7 @@ plt.semilogx()
 plt.grid()
 plt.title("100 samples per event")
 plt.tight_layout()
-plt.savefig(opts.pathplot+"colored_samples_perevent_year92.png")
+plt.savefig(opts.pathplot+opts.methodtag+"colored_samples_perevent_year92.png")
 plt.show()
 hdf_file.close()
 
@@ -255,15 +255,15 @@ bwgrid = opts.bw_grid      # 15 choices from 0.001 to 0.5
 ##First median samples KDE use loo_cv for alpha/bw
 current_kde, errorkdeval, errorbBW, erroraALP = u_awkde.kde_twoD_with_do_optimize(median_samples, grid_pts, bwgrid, alphagrid, ret_kde=True, optimize_method='loo_cv')
 ZZ = errorkdeval.reshape(XX.shape)
-u_plot.new2DKDE(nonlnXX, YY,  ZZ, median_arr_M, median_arr_z, iterN=0, saveplot=True, title='medianPEKDE', show_plot=True)
+u_plot.new2DKDE(nonlnXX, YY,  ZZ, median_arr_M, median_arr_z, iterN=0, saveplot=True, title='medianPEKDE', show_plot=True, pathplot=opts.pathplot)
 
-u_plot.ThreePlots(XX, YY, ZZ, ZZ, ZZ, nonlnXX, TheoryMtot, Theory_z, iternumber=0, plot_name='medianPEKDE', make_errorbars=False, show_plot=True)
+u_plot.ThreePlots(XX, YY, ZZ, ZZ, ZZ, nonlnXX, TheoryMtot, Theory_z, iternumber=0, plot_name='medianPEKDE', make_errorbars=False, show_plot=True, pathplot=opts.pathplot)
 ############## All data KDE ##############################################################################
 ZZall = u_awkde.kde_awkde(all_samples, grid_pts, global_bandwidth=errorbBW, alpha=erroraALP, ret_kde=False)
 ZZall = ZZall.reshape(XX.shape)
 
-u_plot.new2DKDE(nonlnXX, YY,  ZZall, flat_M_all, flat_z_all, iterN=0, saveplot=True, title='KDEallsamples', show_plot=True)
-u_plot.ThreePlots(XX, YY, ZZall, ZZall, ZZall, nonlnXX, TheoryMtot, Theory_z, iternumber=0, plot_name='allPEsamplesKDE', make_errorbars=False, show_plot=True)
+u_plot.new2DKDE(nonlnXX, YY,  ZZall, flat_M_all, flat_z_all, iterN=0, saveplot=True, title='KDEallsamples', show_plot=True, pathplot=opts.pathplot)
+u_plot.ThreePlots(XX, YY, ZZall, ZZall, ZZall, nonlnXX, TheoryMtot, Theory_z, iternumber=0, plot_name='allPEsamplesKDE', make_errorbars=False, show_plot=True, pathplot=opts.pathplot)
 #quit()
 ########## ASTROPHYSICAL catalog DATA
 #data = np.loadtxt("/home/jsadiq/Research/E_awKDE/CatalogLISA/lensedPopIII/combined_intrinsicdata100years_Mz_z_withPlanck_cosmology.dat").T
@@ -272,8 +272,8 @@ Theory_z = data[1]
 TheoryMtot = data[0]
 #We want source frame mass
 TheoryMtot /= (1.0 +  Theory_z)
-u_plot.ThreePlots(XX, YY, ZZall, ZZall, ZZall, nonlnXX, TheoryMtot, Theory_z, plot_name='AllSamples')
 
+u_plot.ThreePlots(XX, YY, ZZall, ZZall, ZZall, nonlnXX, TheoryMtot, Theory_z, plot_name='AllSamples', pathplot=opts.pathplot)
 
 #### Iterative weighted-KDE
 iterbwlist = []
@@ -296,9 +296,9 @@ for i in range(TotalIterations+discard):
     for sampleM, sample_z,  samples_pdet in zip(sampleslists_M, sampleslists_z, sampleslists_pdet):
         samples= np.vstack((np.log10(sampleM), sample_z)).T
         if i < discard + Nbuffer :
-            rwsample= get_reweighted_sample(samples, samples_pdet, current_kde, bootstrap=opts.bootstrap_option)
+            rwsample= get_reweighted_sample(samples, samples_pdet, current_kde, bootstrap=opts.bootstrap_option, use_prior=opts.useprior)
         else: 
-            rwsample= median_bufferkdelist_reweighted_samples(samples, samples_pdet, np.log10(M_grid), z_grid, kdevalslist[-Nbuffer:], bootstrap_choice=opts.bootstrap_option)
+            rwsample= median_bufferkdelist_reweighted_samples(samples, samples_pdet, np.log10(M_grid), z_grid, kdevalslist[-Nbuffer:], bootstrap_choice=opts.bootstrap_option, use_prior=opts.useprior)
         rwsamples.append(rwsample)
     rwsamples = np.concatenate(rwsamples)
     print("iter", i, "  totalsamples = ", len(rwsamples))
@@ -314,9 +314,9 @@ for i in range(TotalIterations+discard):
         medKDE = np.percentile(kdevalslist[-Nbuffer:], 50, axis=0)
         KDE5th = np.percentile(kdevalslist[-Nbuffer:], 5, axis=0)
         KDE95th = np.percentile(kdevalslist[-Nbuffer:], 95, axis=0)
-        u_plot.ThreePlots(XX, YY, medKDE, KDE95th, KDE5th, nonlnXX, TheoryMtot, Theory_z ,iternumber=i, plot_name='AvergeKDE2D', make_errorbars=True, show_plot=True)
-        u_plot.histogram_datalist(iterbwlist[-Nbuffer:], dataname='bw', pathplot='./', Iternumber=i)
-        u_plot.histogram_datalist(iteralplist[-Nbuffer:], dataname='alpha', pathplot='./', Iternumber=i)
+        u_plot.ThreePlots(XX, YY, medKDE, KDE95th, KDE5th, nonlnXX, TheoryMtot, Theory_z ,iternumber=i, plot_name='AvergeKDE2D', make_errorbars=True, show_plot=True, pathplot = opts.pathplot)
+        u_plot.histogram_datalist(iterbwlist[-Nbuffer:], dataname='bw', pathplot=opts.pathplot, Iternumber=i)
+        u_plot.histogram_datalist(iteralplist[-Nbuffer:], dataname='alpha', pathplot=opts.pathplot, Iternumber=i)
     print(i, "step done ")
 frateh5.create_dataset('bandwidths', data=iterbwlist)
 frateh5.create_dataset('alphas', data=iteralplist)
@@ -325,7 +325,7 @@ frateh5.close()
 average_list = np.percentile(kdevalslist[discard:], 50, axis=0) 
 pc5th_list = np.percentile(kdevalslist[discard:], 5, axis=0) 
 pc95th_list = np.percentile(kdevalslist[discard:], 95, axis=0) 
-u_plot.ThreePlots(XX, YY, average_list, pc95th_list, pc5th_list, nonlnXX, TheoryMtot, Theory_z, iternumber=1001, plot_name='combined1000iterations', make_errorbars=True, show_plot=True)
+u_plot.ThreePlots(XX, YY, average_list, pc95th_list, pc5th_list, nonlnXX, TheoryMtot, Theory_z, iternumber=1001, plot_name='combined1000iterations', make_errorbars=True, show_plot=True, pathplot=opts.pathplot)
 
 
 #alpha bw plots
