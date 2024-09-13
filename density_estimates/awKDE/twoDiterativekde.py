@@ -70,79 +70,110 @@ def prior_factor_function(samples, logkde=opts.logparam_prior):
 
 ###### reweighting  methods ####################################
 def get_random_sample(original_samples, bootstrap='poisson'):
-    """without reweighting"""
+    """
+     Generates a random sample from the given original samples 
+     using the specified bootstrap method.
+
+    Args:
+        original_samples (numpy.ndarray): The original samples from which to draw the random sample.
+        bootstrap (str, optional): The bootstrap method to use. Can be 'poisson' or 'regular'. Defaults to 'poisson'.
+
+    Returns:
+        numpy.ndarray: A[/few/none for Poisson] random sample drawn from the original samples
+
+    """
     rng = np.random.default_rng()
     if bootstrap =='poisson':
+        # Sample with replacement using Poisson distribution
         reweighted_sample = rng.choice(original_samples, np.random.poisson(1))
     else:
+        # Sample with replacement using a uniform distribution
         reweighted_sample = rng.choice(original_samples)
     return reweighted_sample
 
 
 def get_reweighted_sample(original_samples, pdetvals, fpop_kde, bootstrap='poisson', prior_factor=prior_factor_function, use_prior=False):
     """
-    inputs 
-    original_samples: list of mean of each event samples 
-    fpop_kde: kde_object [GaussianKDE(opt alpha, opt bw and Cov=True)]
-    kwargs:
-    bootstrap: [poisson or nopoisson] from araparser option
-    prior: for ln parameter in we need to handle non uniform prior
-    return: reweighted_sample 
-    one or array with poisson choice
-    if reweight option is used
-    using kde_object compute probabilty on original samples and 
-    we compute rate using Vt as samples 
-    and apply 
-    use in np.random.choice  on kwarg 
+    Generates a reweighted sample from the given original samples 
+    based on the provided probability density estimation (PDE) 
+    and optional prior factor.
+
+    Args:
+        original_samples (numpy.ndarray): The original samples from
+           which to draw the reweighted sample.
+        pdetvals (numpy.ndarray): pdet (selection effects) values 
+           corresponding to the original samples.
+        fpop_kde (GaussianKDE): The KDE object from previous iteration 
+           use for reweight samples.
+        bootstrap (str, optional): The bootstrap method to use.
+           Can be 'poisson' or 'regular'. Defaults to 'poisson'.
+        prior_factor (function, optional): A function that calculates 
+           the prior factor for reweighting. Defaults to `prior_factor_function`.
+        use_prior (bool, optional): Whether to use the prior factor for 
+           reweighting. Defaults to False.
+
+    Returns:
+        numpy.ndarray: A reweighted sample drawn from the original samples.
     """
-    # need to test this
-    fkde_samples = fpop_kde.predict(original_samples)*1.0/pdetvals
+    #Issue can occus oif pdet <<1 1e-6 or small maybe 0
+    fkde_samples = fpop_kde.predict(original_samples)
+    fkde_with_pdet = fkde_samples * 1.0/pdetvals
+
     if use_prior == True:
-        frate_atsample = fkde_samples * prior_factor(original_samples) 
+        fpop_atsample = fkde_with_pdet * prior_factor(original_samples) 
     else:
-        frate_atsample = fkde_samples
-    fpop_at_samples = frate_atsample/frate_atsample.sum() # normalize
+        fpop_atsample = fkde_with_pdet
+
+    fpop_norm = fpop_atsample/fpop_atsample.sum() # normalize
+
     rng = np.random.default_rng()
     if bootstrap =='poisson':
-        reweighted_sample = rng.choice(original_samples, np.random.poisson(1), p=fpop_at_samples)
+        reweighted_sample = rng.choice(original_samples, np.random.poisson(1), p=fpop_norm)
     else:
-        reweighted_sample = rng.choice(original_samples, p=fpop_at_samples)
+        reweighted_sample = rng.choice(original_samples, p=fpop_norm)
 
     return reweighted_sample
 
 
 def median_bufferkdelist_reweighted_samples(original_samples, original_pdet, Log10_Mz_val, z_val, kdelist, bootstrap_choice='poisson', prior_factor=prior_factor_function, use_prior=False):
     """
-    using previous 100 ietrations pdf estimates (kde or rate)
-    interpolate all of them to get values of KDE on
-    original samples(means of PE samples)
-    take the average of KDE values[at those samples]
-    and normalize them and use them  as probablity in
-    reweighting samples
-    -------------
-    inputs
-    sample : original samples or mean of PE samples
-    x_grid_kde : x-grid onto which kdes are computes
-    kdelist : previous 100 kdes in iterations [buffer]
-    bootstrap_choice :by default poisson or use from opts.bootstrap option
-    prior_factor: for log10Mz parameter to take into account non uniform prior
-    return:
-    reweighted sample , pdet [none, one or array of values] based on poisson
-    dsitrubution with mean 1.
+    Generates a reweighted sample using the median KDE from a list of previous N iterations.
+    Note that medain with 50th percentile need transpose 
+                np.percentile(kdelist, 50, axis=0).T
+    Args:
+        original_samples (numpy.ndarray): The original samples to reweight.
+        original_pdet (numpy.ndarray): The original pdet values (selection effects).
+        Log10_M_val (numpy.ndarray): The log10 M values used for the KDEs.
+        z_val (numpy.ndarray): The z values used for the KDEs.
+        kdelist (list): A list of previous KDE estimates for previous N iterations
+        bootstrap_choice (str, optional): The bootstrap method to use ('poisson' or 'regular'). 
+           Defaults to 'poisson'.
+        prior_factor (function, optional): A function to calculate the prior factor. 
+           Defaults to `prior_factor_function`.
+        use_prior (bool, optional): Whether to use the prior factor for reweighting. 
+            Defaults to False.
+
+    Returns:
+        numpy.ndarray: A reweighted sample.
     """
-    # get median and than make an interpolator
+    # get median and than make an interpolator #must take transpose of median output otherwise incorrect
     median_kde_values = np.percentile(kdelist, 50, axis=0)
-    #apply .T to check
     interp = RegularGridInterpolator((Log10_Mz_val, z_val), median_kde_values.T, bounds_error=False, fill_value=0.0)
-    kde_interp_vals = interp(original_samples)*(1.0/original_pdet)#*prior_factor(original_samples)
+    kde_interp_vals = interp(original_samples)
+    fkde_with_pdet  =  kde_interp_vals * (1.0/original_pdet)
+
     if use_prior == True:
-        kde_interp_vals *= prior_factor(original_samples)
-    norm_mediankdevals = kde_interp_vals/sum(kde_interp_vals)
+        fpop_atsample = fkde_with_pdet * prior_factor(original_samples)
+    else:
+        fpop_atsample = fkde_with_pdet
+
+    fpop_norm = fpop_atsample/fpop_atsample.sum() # normalize
+
     rng = np.random.default_rng()
     if bootstrap_choice =='poisson':
-        reweighted_sample = rng.choice(original_samples, np.random.poisson(1), p=norm_mediankdevals)
+        reweighted_sample = rng.choice(original_samples, np.random.poisson(1), p=fpop_norm)
     else:
-        reweighted_sample = rng.choice(original_samples, p=norm_mediankdevals)
+        reweighted_sample = rng.choice(original_samples, p=fpop_norm)
     return reweighted_sample
 
 
