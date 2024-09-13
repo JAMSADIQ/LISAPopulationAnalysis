@@ -5,6 +5,8 @@
 *.pyc
 # Ignore folder
 old_deleteshort100iterdata/
+Test1/
+TestWithPdetFactor/
 
 
 
