@@ -10,44 +10,18 @@ import sys
 import utils_awkde as u_awkde
 import utils_plot as u_plot
 from matplotlib import rcParams
-from matplotlib.colors import LogNorm
-import matplotlib.colors as colors
-from matplotlib import cm
-import matplotlib.ticker as ticker
-import matplotlib.gridspec as gridspec
-from matplotlib.lines import Line2D
-import matplotlib.ticker as ticker
-import matplotlib.patches
-from matplotlib.patches import Rectangle
-import glob
-import deepdish as dd
-
 rcParams["text.usetex"] = True
 rcParams["font.serif"] = "Computer Modern"
 rcParams["font.family"] = "Serif"
-rcParams["xtick.labelsize"]=18
-rcParams["ytick.labelsize"]=18
-rcParams["xtick.direction"]="in"
-rcParams["ytick.direction"]="in"
-rcParams["legend.fontsize"]=18
-rcParams["axes.labelsize"]=18
-rcParams["axes.grid"] = True
-rcParams["grid.color"] = 'grey'
-rcParams["grid.linewidth"] = 1.
-#rcParams["grid.linestyle"] = ':'
-rcParams["grid.alpha"] = 0.6
 
 
-
-
-
-
-#careful parsers 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--datafilename',  default='/home/jsadiq/Research/E_awKDE/CatalogLISA/lensedPopIII/json-params/samples/new_save_pdet_with_time_to_merger_randomize/SourceMasswithcorrection_time_SNRthreshold8.0combine_4years_lensed_events.hdf',help='h5 file containing N samples for m1for all gw bbh event')
+
 ### For KDE in log parameter we need to add --logkde 
 parser.add_argument('--logkde', action='store_true',help='if True make KDE in log params but results will be in onlog')
 bwchoices= np.logspace(-1.5, -0.5, 10).tolist() 
+
 parser.add_argument('--bw-grid', default= bwchoices, nargs='+', help='grid of choices of global bandwidth')
 alphachoices = [0.0, 0.1, 0.2, 0.4, 0.5, 0.6, 0.8, 1.0]#np.linspace(0., 1.0, 11).tolist()
 parser.add_argument('--alpha-grid', nargs="+", default=alphachoices, type=float, help='grid of choices of sensitivity parameter alpha for local bandwidth')
@@ -56,10 +30,10 @@ parser.add_argument('--alpha-grid', nargs="+", default=alphachoices, type=float,
 parser.add_argument('--reweightmethod', default='bufferkdevals', help='Only for gaussian sample shift method: we can reweight samples via buffered kdevals(bufferkdevals) or buffered kdeobjects (bufferkdeobject)', type=str)
 parser.add_argument('--reweight-sample-option', default='reweight', help='choose either "noreweight" or "reweight" if reweight use fpop prob to get reweight sample (one sample for no bootstrap or no or multiple samples for poisson)', type=str)
 parser.add_argument('--bootstrap-option', default='poisson', help='choose either "poisson" or "nopoisson" if None it will reweight based on fpop prob with single reweight sample for eaxh event', type=str)
-
-#### buffer iteratio
-parser.add_argument('--buffer-start', default=5, type=int, help='start of buffer in reweighting.')
+parser.add_argument('--logparam-prior', default=True, help='Prior factor in reweighting')
+parser.add_argument('--buffer-start', default=100, type=int, help='start of buffer in reweighting.')
 parser.add_argument('--buffer-interval', default=100, type=int, help='interval of buffer that choose how many previous iteration resulkts we use in next iteration for reweighting.')
+parser.add_argument('--total-iterations', default=1000, type=int, help='number of  iteration in iterative reweighting.')
 
 #plots and saving data
 parser.add_argument('--pathplot', default='./', help='public_html path for plots', type=str)
@@ -69,22 +43,28 @@ opts = parser.parse_args()
 
 
 #############for ln paramereter we need these
-def prior_factor_function(samples):
-    """ 
-    LVC use uniform-priors for masses 
-    in linear sclae. so
-    reweighting need a constant factor
-
-   note that in the reweighting function if we use input masses in log
-   form so when we need to factor
-   we need non-log mass  so we take exp
+def prior_factor_function(samples, logkde=opts.logparam_prior):
     """
-    Mz_vals, z_vals = samples[:, 0], samples[:, 1]
-    if opts.logkde:
-        #it is assumed that samples are log10(Mz)
-        factor = 1.0/10**(Mz_vals)
+    Calculates the prior factor for reweighting samples in the context of
+    LVC's uniform-prior assumption for masses in linear scale.
+
+    Args:
+        samples (numpy.ndarray): A 2D NumPy array containing the samples, where
+            the first column represents the total masses (M) and the second column
+            represents the redshifts (z).
+        logkde (bool, optional): If True, indicates that the input masses are
+            already in log10 form. Defaults to True.
+
+    Returns:
+        numpy.ndarray: A 1D NumPy array containing the prior factor for each
+        sample.
+    """
+    M_vals, z_vals = samples[:, 0], samples[:, 1]
+    if  logkde:
+        #If the input masses are log10(Mz), calculate the factor accordingly
+        factor = 1.0/10**(M_vals)
     else:
-        factor = np.ones_like(Mz_vals)
+        factor = np.ones_like(M_vals)
     return factor
 
 
@@ -212,6 +192,7 @@ for event_name in hdf_file.keys():
 plt.xlabel(r"$M_\mathrm{source}\, [M_\odot]$", fontsize=20)
 plt.ylabel(r"$\mathrm{redshift}$", fontsize=20)
 plt.semilogx()
+plt.grid()
 plt.title("100 samples per event")
 plt.tight_layout()
 plt.savefig(opts.pathplot+"colored_samples_perevent_year92.png")
