@@ -25,6 +25,7 @@ bwchoices= np.logspace(-1.5, -0.5, 10).tolist()
 parser.add_argument('--bw-grid', default= bwchoices, nargs='+', help='grid of choices of global bandwidth')
 alphachoices = [0.0, 0.1, 0.2, 0.4, 0.5, 0.6, 0.8, 1.0]#np.linspace(0., 1.0, 11).tolist()
 parser.add_argument('--alpha-grid', nargs="+", default=alphachoices, type=float, help='grid of choices of sensitivity parameter alpha for local bandwidth')
+parser.add_argument('--crossvalidationmethod', default='loo_cv', type=str, help='leave one out cv or k-fold for best choice of alpha and bw default is loo_cv for k fold check number of folds')
 
 # limits on KDE evulation: 
 parser.add_argument('--reweightmethod', default='bufferkdevals', help='Only for gaussian sample shift method: we can reweight samples via buffered kdevals(bufferkdevals) or buffered kdeobjects (bufferkdeobject)', type=str)
@@ -36,8 +37,9 @@ parser.add_argument('--buffer-interval', default=100, type=int, help='interval o
 parser.add_argument('--total-iterations', default=1000, type=int, help='number of  iteration in iterative reweighting.')
 
 #plots and saving data
+parser.add_argument('--methodtag', default='withpdetandpriorfactor', help='mention if we are using pdet factor and prior in reweighting', type=str)
 parser.add_argument('--pathplot', default='./', help='public_html path for plots', type=str)
-parser.add_argument('--pathtag', default='re-weight-bootstrap_', help='public_html path for plots', type=str)
+parser.add_argument('--pathplot', default='./', help='public_html path for plots', type=str)
 parser.add_argument('--output-filename', default='output_data_', help='write a proper name of output hdf files based on analysis', type=str)
 opts = parser.parse_args()
 
@@ -181,8 +183,7 @@ def normdata(dataV):
     normalized_data = (dataV - np.min(dataV)) / (np.max(dataV) - np.min(dataV))
     return normalized_data
 
-############################################################################
-
+###################Specific HDF data #########
 hdf_file = h5.File(opts.datafilename, 'r')
 sampleslists_M = []
 sampleslists_z = []
@@ -200,19 +201,14 @@ for event_name in hdf_file.keys():
     data_M = data[0]
     data_z = data[1]
     data_pdet = data[2]
-    # remove below if there is no issue with z >20
-    indices = np.argwhere(data_z <= 20).flatten()
-    #print(event_name, data_M[indices], data_z[indices])
-    
+    # remove samples  with z >20
+    #indices = np.argwhere(data_z <= 20).flatten()
+    # remove samples with pdet < 1e-4
     #indices = np.argwhere(data_pdet >= 1e-3).flatten()
-    data_z = data_z[indices]
-    dataM = data_M[indices]
-    datapdet = data_pdet[indices]
-    #if np.max(data_z > 23.0) and np.max(np.log10(data_M) > 3):
-        #plt.figure()
+    data_z = data_z#[indices]
+    dataM = data_M#[indices]
+    datapdet = data_pdet#[indices]
     plt.scatter(dataM, data_z, marker='+')
-        #plt.title(event_name)
-        #plt.show()
     sampleslists_M.append(dataM)
     sampleslists_pdet.append(datapdet)
     sampleslists_z.append(data_z)
@@ -229,41 +225,45 @@ plt.tight_layout()
 plt.savefig(opts.pathplot+"colored_samples_perevent_year92.png")
 plt.show()
 hdf_file.close()
+
+
 median_arr_M = np.array(medianlist_M)
 median_arr_z = np.array(medianlist_z)
 median_arr_pdet = np.array(medianlist_pdet)
-#sampleslists = np.vstack((np.array(sampleslists_M), np.array(sampleslists_z))).T
-
 flat_M_all = np.concatenate(sampleslists_M).flatten()#np.array(sampleslists_M).flatten()
 flat_z_all = np.concatenate(sampleslists_z).flatten()
 flat_pdet_all = np.concatenate(sampleslists_pdet).flatten()
 
-M_grid = np.logspace(2., 9., 200)
-z_grid = np.logspace(-1, np.log10(20), 200)
+
+#################Range of values for KDE evaluation ################
+######### 1:  Range of at which to evluate KDE can be set in parser Use logpace points
+M_grid = np.logspace(2., 9., 200)  #100-10^9
+z_grid = np.logspace(-1, np.log10(20), 200) #0.1 to 20
 
 XX, YY = np.meshgrid(np.log10(M_grid), z_grid)
-nonlnXX, YY = np.meshgrid(M_grid, z_grid)
+nonlnXX, YY = np.meshgrid(M_grid, z_grid) #For plotting
+
 grid_pts = np.array(list(map(np.ravel, [XX, YY]))).T
-sample = np.vstack((np.log10(median_arr_M) ,median_arr_z)).T
+median_samples = np.vstack((np.log10(median_arr_M) ,median_arr_z)).T
 all_samples = np.vstack((np.log10(flat_M_all), flat_z_all)).T
 print("total samples", len(flat_pdet_all), len(flat_z_all), all_samples.shape)
 
-############### Code is expensive we got opt vals on median and save them below
-alphagrid = opts.alpha_grid #
-bwgrid = opts.bw_grid
-##First median samples KDE
-#optimize_method default is loo_cv
-current_kde, errorkdeval, errorbBW, erroraALP = u_awkde.kde_twoD_with_do_optimize(sample, grid_pts, bwgrid, alphagrid, ret_kde=True, optimize_method='kfold_cv')
-ZZ = errorkdeval.reshape(XX.shape)
-#priorfactor
+##### KDE parameters
+alphagrid = opts.alpha_grid # using 0-1 with 0.1 spacing 11 choices
+bwgrid = opts.bw_grid      # 15 choices from 0.001 to 0.5
 
-u_plot.new2DKDE(nonlnXX, YY,  ZZ, median_arr_M, median_arr_z, iterN=0, saveplot=True, title='medianKDE')
-############## All data KDE #############################
+##First median samples KDE use loo_cv for alpha/bw
+current_kde, errorkdeval, errorbBW, erroraALP = u_awkde.kde_twoD_with_do_optimize(median_samples, grid_pts, bwgrid, alphagrid, ret_kde=True, optimize_method='loo_cv')
+ZZ = errorkdeval.reshape(XX.shape)
+u_plot.new2DKDE(nonlnXX, YY,  ZZ, median_arr_M, median_arr_z, iterN=0, saveplot=True, title='medianPEKDE', show_plot=True)
+
+u_plot.ThreePlots(XX, YY, ZZ, ZZ, ZZ, nonlnXX, TheoryMtot, Theory_z, iternumber=0, plot_name='medianPEKDE', make_errorbars=False, show_plot=True)
+############## All data KDE ##############################################################################
 ZZall = u_awkde.kde_awkde(all_samples, grid_pts, global_bandwidth=errorbBW, alpha=erroraALP, ret_kde=False)
 ZZall = ZZall.reshape(XX.shape)
 
-u_plot.new2DKDE(nonlnXX, YY,  ZZall, flat_M_all, flat_z_all, iterN=1, saveplot=True, title='KDEallsamples')
-
+u_plot.new2DKDE(nonlnXX, YY,  ZZall, flat_M_all, flat_z_all, iterN=0, saveplot=True, title='KDEallsamples', show_plot=True)
+u_plot.ThreePlots(XX, YY, ZZall, ZZall, ZZall, nonlnXX, TheoryMtot, Theory_z, iternumber=0, plot_name='allPEsamplesKDE', make_errorbars=False, show_plot=True)
 #quit()
 ########## ASTROPHYSICAL catalog DATA
 #data = np.loadtxt("/home/jsadiq/Research/E_awKDE/CatalogLISA/lensedPopIII/combined_intrinsicdata100years_Mz_z_withPlanck_cosmology.dat").T
@@ -273,23 +273,23 @@ TheoryMtot = data[0]
 #We want source frame mass
 TheoryMtot /= (1.0 +  Theory_z)
 u_plot.ThreePlots(XX, YY, ZZall, ZZall, ZZall, nonlnXX, TheoryMtot, Theory_z, plot_name='AllSamples')
-#quit()
+
 
 #### Iterative weighted-KDE
 iterbwlist = []
 iteralplist = []
 iterbwlist = []
 iteralplist = []
-
-frateh5 = h5.File(opts.output_filename+'awkde_method_Data2DIterativeCase.hdf5', 'w')
+frateh5 = h5.File(opts.output_filename+'awkde_method_'+opts.methodtag+'Data2DIterativeCase.hdf5', 'w')
 dsetxx = frateh5.create_dataset('M', data=nonlnXX)
 dsetyy = frateh5.create_dataset('z', data=YY)
 
-discard = int(opts.buffer_start)   # how many iterations to discard default =5
+discard = int(opts.buffer_start)   # how many iterations to discard default =100
 Nbuffer = int(opts.buffer_interval) #100 buffer [how many (x-numbers of ) previous iteration to use in reweighting with average of those past (x-numbers of ) iteration results
 kdevalslist = []
-TotalIterations = 100
+TotalIterations = int(opts.total_iterations)#1000
 
+print("optimization of alpha and bw with ", opts.crossvalidationmethod)
 for i in range(TotalIterations+discard):
     print("i - ", i)
     rwsamples = []
@@ -302,7 +302,8 @@ for i in range(TotalIterations+discard):
         rwsamples.append(rwsample)
     rwsamples = np.concatenate(rwsamples)
     print("iter", i, "  totalsamples = ", len(rwsamples))
-    current_kde, current_kdeval, shiftedbw, shiftedalp =  u_awkde.kde_twoD_with_do_optimize(rwsamples, grid_pts, bwgrid, alphagrid, ret_kde=True, optimize_method='kfold_cv')
+    print("optimization of alpha and bw with ")
+    current_kde, current_kdeval, shiftedbw, shiftedalp =  u_awkde.kde_twoD_with_do_optimize(rwsamples, grid_pts, bwgrid, alphagrid, ret_kde=True, optimize_method=opts.crossvalidationmethod)
     #u_awkde.get_Ndimkde(np.array(rwsamples), grid_pts, alphagrid, bwgrid, ret_kde=True)
     current_kdeval = current_kdeval.reshape(XX.shape)
     kdevalslist.append(current_kdeval)
@@ -313,20 +314,18 @@ for i in range(TotalIterations+discard):
         medKDE = np.percentile(kdevalslist[-Nbuffer:], 50, axis=0)
         KDE5th = np.percentile(kdevalslist[-Nbuffer:], 5, axis=0)
         KDE95th = np.percentile(kdevalslist[-Nbuffer:], 95, axis=0)
-        u_plot.ThreePlots(XX, YY, medKDE, KDE95th, KDE5th, nonlnXX, TheoryMtot, Theory_z ,iternumber=i, plot_name='AvergeKDE2D')
+        u_plot.ThreePlots(XX, YY, medKDE, KDE95th, KDE5th, nonlnXX, TheoryMtot, Theory_z ,iternumber=i, plot_name='AvergeKDE2D', make_errorbars=True, show_plot=True)
         u_plot.histogram_datalist(iterbwlist[-Nbuffer:], dataname='bw', pathplot='./', Iternumber=i)
         u_plot.histogram_datalist(iteralplist[-Nbuffer:], dataname='alpha', pathplot='./', Iternumber=i)
     print(i, "step done ")
 frateh5.create_dataset('bandwidths', data=iterbwlist)
 frateh5.create_dataset('alphas', data=iteralplist)
-
 frateh5.close()
 # Calculate the average of all KDE after discard
 average_list = np.percentile(kdevalslist[discard:], 50, axis=0) 
 pc5th_list = np.percentile(kdevalslist[discard:], 5, axis=0) 
 pc95th_list = np.percentile(kdevalslist[discard:], 95, axis=0) 
-
-u_plot.ThreePlots(XX, YY, average_list, pc95th_list, pc5th_list, nonlnXX, TheoryMtot, Theory_z, iternumber=1001, plot_name='Awcombined_all')
+u_plot.ThreePlots(XX, YY, average_list, pc95th_list, pc5th_list, nonlnXX, TheoryMtot, Theory_z, iternumber=1001, plot_name='combined1000iterations', make_errorbars=True, show_plot=True)
 
 
 #alpha bw plots
