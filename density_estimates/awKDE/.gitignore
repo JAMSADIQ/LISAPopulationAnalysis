@@ -1,0 +1,10 @@
+# Ignore environment files
+.env
+# Ignore compiled files
+*.o
+*.pyc
+# Ignore folder
+old_deleteshort100iterdata/
+
+
+
