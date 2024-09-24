@@ -72,109 +72,152 @@ def TwocontourKDE(XX, YY,  ZZ, LogMzvals, zvals, pdetvals, title='KDE', iterN=0,
     return 0
 
 from scipy.integrate import simpson
-def  ThreePlots(XX, YY, ZZ,  TheoryMtot, Theory_z, logKDE=True,  iternumber=1, plot_name='median'):
+def OneDintegral(Xx, Yy, Zz):
+    kde_Mz = simpson(y=Zz, x=Yy, axis=0)
+    # Integrate along the y-axis
+    kde_Z = simpson(y=Zz, x=Xx, axis=1)
+    return kde_Mz, kde_Z
+
+def  ThreePlots(XX, YY, ZZ, ZZ95, ZZ5, nonlogXX, TheoryMtot, Theory_z, logKDE=True,  iternumber=1, plot_name='median', Nobs=338, make_errorbars=False, show_plot=False,  pathplot='./'):
     """
     Plots for paper only detected KDEas
     """
-    # Integrate along the Mz-axis Now we compute 2D KDE using log10M not M
-    kde_Mz = simpson(y=ZZ, x=YY, axis=0)
-    # Integrate along the y-axis
-    if logKDE==False:
-        nonln_XX = np.exp(XX)/np.log(10)
-        kde_Z = simpson(y=ZZ, x=nonln_XX, axis=1)
-    else:
-        kde_Z = simpson(y=ZZ, x=XX, axis=1)
-
-    #kde_Mz = normdata(kde_Mz)
-    #kde_Z = normdata(kde_Z)
+    kde_Mz, kde_Z = OneDintegral(XX, YY, ZZ)
+    kde_Mz95, kde_Z95 = OneDintegral(XX, YY, ZZ95)
+    kde_Mz5, kde_Z5 = OneDintegral(XX, YY, ZZ5)
 
     # Plot the original function
     fig, axs = plt.subplots(2, 2, figsize=(8, 8), gridspec_kw={'width_ratios': [1, 0.5], 'height_ratios': [0.5, 1]})
+    contourlevels = np.logspace(-4, -1, 7)
     #ax1 = fig.add_subplot(121, projection='3d')
-    axs[1,0].contour(XX, YY, ZZ, cmap='viridis')
-    axs[1,0].set_xlabel('Log10[Mz]')
-    axs[1,0].set_ylabel('z')
+    axs[1,0].contour(nonlogXX, YY, ZZ, levels = contourlevels , colors='black', linestyles='dashed', linewidths=1, norm=LogNorm())
+    axs[1,0].set_xlabel(r'$M_\mathrm{source} \,  [M_\odot]$', fontsize=20)
+    axs[1,0].set_ylabel(r'$\mathrm{redshift}$', fontsize=20)
+    axs[1,0].semilogx()
 
 
-    # Plot the integrated results
-    #ax2 = fig.add_subplot(122)
-    axs[0,0].plot(XX[0,:], kde_Mz, label='obs')
-    #axs[0,0].plot(IntM, IntKDEM, 'k--', label='Intrinsic')
+    axs[0,0].plot(nonlogXX[0,:], kde_Mz, label='obs')
     axs[0,0].legend()
-    #axs[0,0].set_xlabel('Log10[Mz]')
-    axs[0,0].set_ylabel('p(Log10[Mz])')
-    #axs[0,0].set_title('Integrated Results')
+    axs[0,0].semilogx()
+    axs[0,0].set_ylabel(r'p($M_\mathrm{source}$)', fontsize=20)
 
-    #ax3 = fig.add_subplot(123)
-    #axs[1,1].plot(z_eval, kde_Mz, label='Integral along y')
-    #rotate plot
     axs[1,1].plot(kde_Z, YY[:, 0], label='obs')
-    #axs[1,1].plot(IntZ, IntKDEz, 'k--', label='Intrinsic')
-    #axs[1,1].plot(IntKDEz, IntZ, 'k--', label='Intrinsic')
-    #axs[1,1].set_ylabel('z')
-    axs[1,1].set_xlabel('p(z)')
+    axs[1,1].set_xlabel(r'p($\mathrm{redshift}$)', fontsize=20)
     axs[1,1].legend()
-    #axs[1,1].set_title('Integrated Results')
+    axs[0, 0].set_xlim(axs[1, 0].get_xlim())
+
+    axs[1, 1].set_ylim(axs[1, 0].get_ylim())
+    # Hide the empty plot space
     axs[0, 1].axis('off')
+    #axs[0, 0].axis('off')
+    plt.title(f"iter = {iternumber}")
     plt.tight_layout()
 
-    plt.savefig(plot_name+"_IterativeKDE_plot_Iter{0}.png".format(iternumber))
-    plt.close()
-    #plt.show()
-    weighthist = 1.0/100*np.ones(len(TheoryMtot))
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
-    ax1.hist(np.log10(TheoryMtot), density=True, bins=20, weights=weighthist, histtype='step', label='detectedintrinsic', lw=2)
-    ax1.plot(XX[0,:], kde_Mz, label='obs')
-    ax1.semilogy()
-    ax1.set_xlabel("Log10[Mz]", fontsize=18)
-    #ax2.hist(z200, bins=10, histtype='step', label='observed', lw=2)
-    ax2.hist(Theory_z, bins=50, histtype='step', density=True, weights=None, label='detected_intrinsic', lw=2)
-    ax2.plot(YY[:, 0], kde_Z, label='obs')
+    plt.savefig(pathplot+plot_name+"_IterativeKDE_plot_Iter{0}.png".format(iternumber))
+    if show_plot==True:
+        plt.show()
+    else:
+        plt.close()
 
-    ax2.set_xlabel("z", fontsize=18)
-    ax2.legend(fontsize=16)
+    fig, (ax2, ax1) = plt.subplots(1, 2, figsize=(10, 5))
+    c, bins = np.histogram(np.log10(TheoryMtot), bins=25, density=True)
+    #c, bins = np.histogram(TheoryMtot, bins=np.logspace(2, 9, 25), density=True)
+    ax1.hist(10**(bins[:-1]), 10**(bins), weights=c*Nobs, histtype='step', label='intrinsic')
+    #ax1.hist(np.log10(TheoryMtot), density=True, bins=20, weights=weighthist, histtype='step', label='detectedintrinsic', lw=2)
+    ax1.plot(nonlogXX[0,:], Nobs*kde_Mz, color = 'r', label='kde')
+    if make_errorbars== True:
+        ax1.plot(nonlogXX[0,:], Nobs*kde_Mz95, 'k--')#, label='5ths')
+        ax1.plot(nonlogXX[0,:], Nobs*kde_Mz5, 'k--')#, label='95ths')
+
+    ax1.semilogx()
+    ax1.set_xlabel(r'$M_\mathrm{source} \,  [M_\odot]$', fontsize=20)
+    c, bins = np.histogram(Theory_z, bins=25, density=True)
+    ax2.hist(bins[:-1], bins, weights=c*Nobs, histtype='step', label='intrinsic')
+
+    #ax2.hist(Theory_z, bins=50, histtype='step', density=True, weights=None, label='detected_intrinsic', lw=2)
+    ax2.plot(YY[:, 0], Nobs*kde_Z, color = 'r',label='median')
+    if make_errorbars== True:
+        ax2.plot(YY[:, 0], Nobs*kde_Z95,'k--', label='5ths')
+        ax2.plot(YY[:, 0], Nobs*kde_Z5, 'k--', label='95ths')
+
+    ax2.set_xlabel(r'$\mathrm{redshift}$', fontsize=20)
+    ax1.legend(fontsize=16)
     fig.suptitle('popIII model', fontsize=16)
     plt.tight_layout()
-    plt.savefig(plot_name+"_withHistIterativeKDE_plot_Iter{0}.png".format(iternumber))
-    #plt.show()
-    plt.close()
+    plt.savefig(pathplot+plot_name+"_withHistIterativeKDE_plot_Iter{0}.png".format(iternumber))
+    if show_plot==True:
+        plt.show()
+    else:
+        plt.close()
     return  0
 
+def compare_twodimensionalKDEPlot(XX, YY, ZZ, ZZ2, title1='instrinsic KDE', title2='PE KDE', plot_name='compareKDE'):
+    contourlevels = np.logspace(-4, -1, 7)
+    #fig, ax = plt.subplots()
+    fig, (ax, ax1) = plt.subplots(2, 1, figsize=(7, 10), sharex=True)
+    p = ax.pcolormesh(XX, YY, ZZ, cmap=plt.cm.get_cmap('Purples'), norm=LogNorm(vmin=1e-4))
+    CS = ax.contour(XX, YY, ZZ,levels = contourlevels , colors='black', linestyles='dashed', linewidths=1, norm=LogNorm())
+    #axl.scatter(datam1, dataD marker=".", color="k", s=40)
+    cbar = plt.colorbar(p, ax=ax)
+    cbar.ax.tick_params(labelsize=20)
+    ax.tick_params(labelsize=15)
+    ax.set_xlabel(r'$Log10[Mz]$')
+    scale_y = 1#e3
+    ticks_y = ticker.FuncFormatter(lambda x, pos: '{0:g}'.format(x/scale_y))
+    ax.yaxis.set_major_formatter(ticks_y)
+    ax.set_ylabel(r"$z$", fontsize=20)
+    ax.set_ylim(ymax=20)
+    ax.set_title("intrinsic-KDE", fontsize=16)
+    p1 = ax1.pcolormesh(XX, YY, ZZ2, cmap=plt.cm.get_cmap('Purples'), norm=LogNorm(vmin=1e-4))
+    ax1.contour(XX, YY, ZZ2,levels = contourlevels , colors='black', linestyles='dashed', linewidths=1, norm=LogNorm())
+    cbar2 = plt.colorbar(p1, ax=ax1)
+    #cbar2.ax1.tick_params(labelsize=20)
+    ax1.tick_params(labelsize=15)
+
+    ax1.set_xlabel(r'$Log10[Mz]$')
+    ax1.set_ylim(ymax=20)
+    #fig.suptitle("Compare KDEs", fontsize=16)
+    ax1.set_title("detected-KDE", fontsize=16)
+    fig.tight_layout()
+    plt.savefig(pathplot+plot_name+'.png')
+    plt.show()
+    return 0
 
 
 
-
-def Delnew2DKDE(XX, YY,  ZZ, title='KDE', iterN=0, saveplot=False):
-    contourlevels = np.logspace(-5, 0, 15)
+def new2DKDE(XX, YY,  ZZ, Mv, z, iterN=0, saveplot=False, title='KDE', show_plot=False, pathplot='./'):
     plt.figure(figsize=(8, 6))
-    contourlevels = np.logspace(-3, 2, 11)[3:]
+    contourlevels = np.logspace(-5, 0, 11)[:]
     # Plotting pcolormesh and contour
-    p = plt.pcolormesh(XX, YY, ZZ, cmap=plt.cm.get_cmap('Purples'),  norm=LogNorm(vmin=1e-7))
-    CS = plt.contour(XX, YY, ZZ, colors='black', linestyles='dashed', linewidths=2, norm=LogNorm(vmin=1e-7))#, levels= contourlevels)
-    
+    p = plt.pcolormesh(XX, YY, ZZ, cmap=plt.cm.get_cmap('Purples'),  norm=LogNorm(vmin=1e-5))
+    CS = plt.contour(XX, YY, ZZ, colors='black', linestyles='dashed', linewidths=2, norm=LogNorm(vmin=1e-5), levels= contourlevels)
+    plt.plot(Mv, z, 'r+') 
     # Colorbar
     cbar = plt.colorbar(p)
     cbar.ax.tick_params(labelsize=20)
-    cbar.set_label(title, fontsize=18)  # Adjust the label text as neede  
+    #cbar.set_label(title, fontsize=18)  # Adjust the label text as neede  
     # Axes and labels
     plt.tick_params(labelsize=15)
-    plt.xlabel(r'$\log_{10}[Mz]$', fontsize=20)
+    plt.xlabel(r'$M_\mathrm{source} \, [M_\odot]$', fontsize=20)
     
     # Y-axis formatting
     scale_y = 1  # Adjust if needed, e.g., 1e3 for scaling
     ticks_y = ticker.FuncFormatter(lambda x, pos: '{0:g}'.format(x / scale_y))
     plt.gca().yaxis.set_major_formatter(ticks_y)
-    plt.ylabel(r"$z$", fontsize=20)
-    
+    plt.ylabel(r"$\mathrm{redshift}$", fontsize=20)
+    plt.semilogx()
+    plt.ylim(ymax=20.5)
     # Title and layout
     plt.tight_layout()
-    plt.suptitle("PopIII Model "+title)
+    plt.suptitle("PopIII Model")
     if saveplot==True:
-        plt.savefig(title+'iter{0}.png'.format(iterN))
+        plt.savefig(pathplot+title+'kde_iter{0}.png'.format(iterN))
     else:
         print("notsaving")
-    plt.close()
-    #plt.show()
+    if show_plot== True:
+        plt.show()
+    else:
+        plt.close()
     return 0
 
 
