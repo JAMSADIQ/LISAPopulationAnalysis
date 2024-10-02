@@ -1,435 +1,347 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
-import utils_plot as u_plot
 import argparse
+import json
 import h5py as h5
-import sys
-from KDEpy.TreeKDE import TreeKDE
-import operator
 import scipy
 from scipy.interpolate import RegularGridInterpolator
+import sys
+import utils_kde as u_scipykde
+import utils_plot as u_plot
+from matplotlib import rcParams
+rcParams["text.usetex"] = True
+rcParams["font.serif"] = "Computer Modern"
+rcParams["font.family"] = "Serif"
 
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('--datafilename',default='../data_files/Lense_4_years_events_randomsamples_Mz_z_pdet_mfpdet.hdf' , help='h5 or txt file containing data for median and sigma for m1')
-parser.add_argument('--type-data', choices=['gw_pe_samples', 'mock_data'], help='mock data for some power law with gaussian peak or gwtc  pe samples data. h5 files for two containing data for median and sigma for m1')
-parser.add_argument('--fpopchoice', default='kde', help='choice of fpop to be rate or kde', type=str)
-bwchoices= np.logspace(-1.5, 0, 15).tolist() #['scott', 'silverman']+ np.logspace(-1.5, 0, 15).tolist() # not ssure if this is good
-parser.add_argument('--bw-grid', default= bwchoices, nargs='+', help='grid of choices of global bandwidth')
-alphachoices = np.linspace(0.1, 1.0, 11).tolist()
-#[0.1, 0.2, 0.3,0.4, 0.5, 0.7, 0.75, 0.8, 0.85, 0.87, 0.9, 0.95, 1.0]
-parser.add_argument('--alpha-grid', nargs="+", default=alphachoices, type=float, help='grid of choices of sensitivity parameter alpha for local bandwidth')
+parser.add_argument('--datafilename',  default='/home/jsadiq/Research/E_awKDE/CatalogLISA/lensedPopIII/json-params/samples/new_save_pdet_with_time_to_merger_randomize/Final_correctedSourceMasswithcorrection_time_SNRthreshold8.0combine_4years_lensed_events.hdf',help='h5 file containing N samples for m1for all gw bbh event')
 
+### For KDE in log parameter we need to add --logkde 
+bwchoices= np.logspace(-2, -0.1, 16).tolist() 
+parser.add_argument('--bw-grid', default= bwchoices, nargs='+', help='grid of choices of global bandwidth')
+alphachoices = [0.0, 0.1, 0.2, 0.4, 0.5, 0.6, 0.8, 1.0]#np.linspace(0., 1.0, 11).tolist()
+parser.add_argument('--alpha-grid', nargs="+", default=alphachoices, type=float, help='grid of choices of sensitivity parameter alpha for local bandwidth')
+parser.add_argument('--crossvalidationmethod', default='loo_cv', type=str, help='leave one out cv or k-fold for best choice of alpha and bw default is loo_cv for k fold check number of folds')
+
+# limits on KDE evulation: 
 parser.add_argument('--reweightmethod', default='bufferkdevals', help='Only for gaussian sample shift method: we can reweight samples via buffered kdevals(bufferkdevals) or buffered kdeobjects (bufferkdeobject)', type=str)
 parser.add_argument('--reweight-sample-option', default='reweight', help='choose either "noreweight" or "reweight" if reweight use fpop prob to get reweight sample (one sample for no bootstrap or no or multiple samples for poisson)', type=str)
 parser.add_argument('--bootstrap-option', default='poisson', help='choose either "poisson" or "nopoisson" if None it will reweight based on fpop prob with single reweight sample for eaxh event', type=str)
-parser.add_argument('--pathplot', default='./', help='directory path for plots', type=str)
+
+parser.add_argument('--logparam-prior', default=True, help='Prior factor in reweighting')
+parser.add_argument('--useprior', default=False, help='if we want to use non uniform prior factor effect. need some chenges in code')
+parser.add_argument('--usepdetfactor', default=False, help='if we want to use selection effect factor effect. need some chenges in code')
+
+parser.add_argument('--buffer-start', default=100, type=int, help='start of buffer in reweighting.')
+parser.add_argument('--buffer-interval', default=100, type=int, help='interval of buffer that choose how many previous iteration resulkts we use in next iteration for reweighting.')
+parser.add_argument('--total-iterations', default=1000, type=int, help='number of  iteration in iterative reweighting.')
+
+#plots and saving data
+parser.add_argument('--methodtag', default='Sqrtpdetinweightswithoutpriorfactor', help='mention if we are using pdet factor and prior in reweighting', type=str)
+parser.add_argument('--pathplot', default='./', help='public_html path for plots', type=str)
+parser.add_argument('--output-filename', default='output_data_', help='write a proper name of output hdf files based on analysis', type=str)
 opts = parser.parse_args()
 
-############################ adaptive-weighted-KDEpy ###################################
-def standardize_data(train_data, eval_data):
+#############for ln paramereter we need these
+def prior_factor_function(samples, logkde=opts.logparam_prior):
     """
-    get standardize data (divide data by its standard deviation)
-    use this for fit and evaluate kde
-    for better results?
-    """
-    #dvide the data by std
-    stds = np.std(train_data, axis=0)  # record the stds
-    std_train_data = np.zeros_like(train_data)
-    for dim, t_data in enumerate(train_data.T):
-        std_train_data[:, dim] = t_data/np.std(t_data)#train_data[:, dim]/np.std(train_data[:, dim]) 
+    Calculates the prior factor for reweighting samples in the context of
+    LVC's uniform-prior assumption for masses in linear scale.
 
-    std_eval_data = np.zeros_like(eval_data)
-    for dim, data in enumerate(eval_data.T):
-        std_eval_data[:, dim] = eval_data[:, dim]/stds[dim]
-    return std_train_data, std_eval_data
+    Args:
+        samples (numpy.ndarray): A 2D NumPy array containing the samples, where
+            the first column represents the total masses (M) and the second column
+            represents the redshifts (z).
+        logkde (bool, optional): If True, indicates that the input masses are
+            already in log10 form. Defaults to True.
 
-
-def adaptive_weighted_kde(train_data, eval_data, bw=0.5, alpha=0., weights=None, returnKDE=False, standardize=False):
+    Returns:
+        numpy.ndarray: A 1D NumPy array containing the prior factor for each
+        sample.
     """
-    Use KDEpy to get weighted 
-    and adaptive kde 
-    we want both in 2D and 1D cases
-    return prepared_kde and kde_evaluated at values
-    """
-    if standardize == True:
-        train_data, eval_data = standardize_data(train_data, eval_data)
-    # get kde on trian data with fixed global bandwidth
-    pilot_kde = TreeKDE(bw=bw).fit(train_data)
-    pilot_values = pilot_kde.evaluate(train_data)
-    from scipy.stats import gmean
-    g = gmean(pilot_values)
-    loc_bw_factor = (pilot_values / g)**alpha
-    bw_arr = bw/loc_bw_factor #check wang and wang paper
-    if weights is not None:
-        #if np.sum(weights)!=1.0:
-        #    weights /=weights.sum()
-        estimate = TreeKDE(bw=bw_arr).fit(train_data, weights)
+    M_vals, z_vals = samples[:, 0], samples[:, 1]
+    if  logkde:
+        #If the input masses are log10(Mz), calculate the factor accordingly
+        factor = 1.0/10**(M_vals)
     else:
-        estimate = TreeKDE(bw=bw_arr).fit(train_data)
-    if returnKDE==True:
-        return estimate, estimate.evaluate(eval_data) 
-    return estimate.evaluate(eval_data)
+        factor = np.ones_like(M_vals)
+    return factor
 
 
-def leave_one_out_cross_validation(sample, bw, alpha, weights=None, standardize=False):
+###### reweighting  methods ####################################
+def get_random_sample(original_samples, original_pdet, bootstrap='poisson'):
     """
-    use log of Likelihood as fom for loocv on samples
-    to choose best bw and smoothing/local bw factor
-    """
-    fom = 0.
-    for i in range(sample.shape[0]):
-        # for oneD case
-        #if sample.shape[0] == sample.shape[-1]:
-        #    leave_one_sample, miss_sample = np.delete(sample, i, axis=0), np.array([[sample[i]]])
-        #else:
-        leave_one_sample, miss_sample = np.delete(sample, i, axis=0), np.array([sample[i]])
-        y = adaptive_weighted_kde(leave_one_sample,  miss_sample, bw=bw, alpha=alpha, weights=weights, standardize=standardize)
-        fom += np.log(y)
-    return fom
+     Generates a random sample from the given original samples 
+     using the specified bootstrap method.
 
-from sklearn.model_selection import KFold
-def k_fold_cross_validation(sample, bw, alpha, k=2, weights=None, standardize=False):
-    """
-    Evaluate the K-fold cross validated log likelihood for an awKDE with
-    specific bandwidth and sensitivity (alpha) parameters
-    """
+    Args:
+        original_samples (numpy.ndarray): The original samples from which to draw the random sample.
+        bootstrap (str, optional): The bootstrap method to use. Can be 'poisson' or 'regular'. Defaults to 'poisson'.
 
-    fomlist = []
-    kfold = KFold(n_splits=k, shuffle=True, random_state=None)
-    for train_index, test_index in kfold.split(sample):
-        train, test = sample[train_index], sample[test_index]
-        y = adaptive_weighted_kde(train, test,  alpha=alpha, bw=bw, weights=None, standardize=standardize)
-        # Figure of merit : log likelihood for training samples
-        fomlist.append(np.sum(np.log(y)))
+    Returns:
+        numpy.ndarray: A[/few/none for Poisson] random sample drawn from the original samples
 
-    # Return the sum over all K sets of training samples
-    return np.sum(fomlist)
+    """
+    rng = np.random.default_rng()
+    if bootstrap =='poisson':
+        # Sample with replacement using Poisson distribution
+        likely_indices = rng.choice(np.arange(len(original_samples)), np.random.poisson(1))
+    else:
+        # Sample with replacement using a uniform distribution
+        likely_indices = rng.choice(np.arange(len(original_samples)))
+
+    reweighted_sample = original_samples[likely_indices]
+    reweighted_pdet = original_pdet[likely_indices]
+    return reweighted_sample, reweighted_pdet
 
 
-def get_optimized_bw_alpha_using_cv(sample, bwgrid, alphagrid, cv_method='loocv',  k=2, weights=None, standardize=False):
+def get_reweighted_sample(original_samples, original_pdet, fpop_kde, bootstrap='poisson', prior_factor=prior_factor_function, use_prior=False):
     """
-    using fom from loocv/ k-fold find optimized bw and alpha
-    """
-    FOM= {}
-    for gbw in bwgrid:
-        for alphaval in alphagrid:
-            print("loop bw, alpha = ", gbw, alphaval)
-            if cv_method == 'loocv':
-                FOM[(gbw, alphaval)] = leave_one_out_cross_validation(sample, gbw, alphaval, weights=weights, standardize=standardize)
-            else:
-                print("k-fold cross validation with k={0}".format(k))
-                FOM[(gbw, alphaval)] = k_fold_cross_validation(sample, gbw, alphaval, k=k, weights=weights, standardize=standardize)
-    optval = max(FOM.items(), key=operator.itemgetter(1))[0]
-    optbw, optalpha  = optval[0], optval[1]
-    maxFOM = max(FOM)
-    return  FOM, optbw, optalpha, maxFOM
+    Generates a reweighted sample from the given original samples 
+    based on the provided probability density estimation (PDE) 
+    and optional prior factor.
 
-def get_opt_params_and_kde(samplevalues, x_gridvalues, bwgrid ,alphagrid, cv_method='loocv', k=2, weights=None, standardization=False):
-    """
-    inputs: samplevalues, x_gridvalues, alphagrid, bwgrid
-        make sure order of alpha and bwds
-    return: kdeval, optbw, optalpha
-      make sure of order of outputs
-    """
-    FOMdict, optbw, optalpha, maxFOM = get_optimized_bw_alpha_using_cv(samplevalues, bwgrid, alphagrid, cv_method=cv_method,  k=k, weights=None, standardize=False)
-    kde_object, kdeval = adaptive_weighted_kde(samplevalues, x_gridvalues, alpha=optalpha, bw=optbw, weights=weights, standardize=standardization, returnKDE=True)
-    print("bw, alp = ", optbw, optalpha)
-    return kdeval, optbw, optalpha, kde_object
+    Args:
+        original_samples (numpy.ndarray): The original samples from
+           which to draw the reweighted sample.
+        original_pdet (numpy.ndarray): pdet (selection effects) values 
+           corresponding to the original samples.
+        fpop_kde (GaussianKDE): The KDE object from previous iteration 
+           use for reweight samples.
+        bootstrap (str, optional): The bootstrap method to use.
+           Can be 'poisson' or 'regular'. Defaults to 'poisson'.
+        prior_factor (function, optional): A function that calculates 
+           the prior factor for reweighting. Defaults to `prior_factor_function`.
+        use_prior (bool, optional): Whether to use the prior factor for 
+           reweighting. Defaults to False.
 
-#normalize data
+    Returns:
+        numpy.ndarray: A reweighted sample drawn from the original samples.
+    """
+    #Issue can occus oif pdet <<1 1e-6 or small maybe 0
+    fkde_samples = fpop_kde(original_samples.T)
+
+    if use_prior == True:
+        #print("using prior factor")
+        fpop_atsample = fkde_samples * prior_factor(original_samples) 
+    else:
+        fpop_atsample = fkde_samples
+
+    fpop_norm = fpop_atsample/fpop_atsample.sum() # normalize
+
+    rng = np.random.default_rng()
+    if bootstrap =='poisson':
+        likely_indices = rng.choice(np.arange(len(original_samples)), np.random.poisson(1), p=fpop_norm)
+
+    else:
+        likely_indices = rng.choice(np.arange(len(original_samples)), p=fpop_norm)
+
+    reweighted_sample = original_samples[likely_indices]
+    reweighted_pdet = original_pdet[likely_indices]
+    return reweighted_sample, reweighted_pdet
+
+
+def median_bufferkdelist_reweighted_samples(original_samples, original_pdet, Log10_Mz_val, z_val, kdelist, bootstrap_choice='poisson', prior_factor=prior_factor_function, use_pdetfactor=False, use_prior=False):
+    """
+    Generates a reweighted sample using the median KDE from a list of previous N iterations.
+    Note that medain with 50th percentile need transpose 
+                np.percentile(kdelist, 50, axis=0).T
+    Args:
+        original_samples (numpy.ndarray): The original samples to reweight.
+        original_pdet (numpy.ndarray): The original pdet values (selection effects).
+        Log10_M_val (numpy.ndarray): The log10 M values used for the KDEs.
+        z_val (numpy.ndarray): The z values used for the KDEs.
+        kdelist (list): A list of previous KDE estimates for previous N iterations
+        bootstrap_choice (str, optional): The bootstrap method to use ('poisson' or 'regular'). 
+           Defaults to 'poisson'.
+        prior_factor (function, optional): A function to calculate the prior factor. 
+           Defaults to `prior_factor_function`.
+        use_prior (bool, optional): Whether to use the prior factor for reweighting. 
+            Defaults to False.
+
+    Returns:
+        numpy.ndarray: A reweighted sample.
+    """
+    # get median and than make an interpolator #must take transpose of median output otherwise incorrect
+    median_kde_values = np.percentile(kdelist, 50, axis=0)
+    interp = RegularGridInterpolator((Log10_Mz_val, z_val), median_kde_values.T, bounds_error=False, fill_value=0.0)
+    kde_interp_vals = interp(original_samples)
+    if use_prior == True:
+        fpop_atsample = kde_interp_vals * prior_factor(original_samples)
+    else:
+        fpop_atsample = kde_interp_vals
+
+    fpop_norm = fpop_atsample/fpop_atsample.sum() # normalize
+
+    rng = np.random.default_rng()
+    if bootstrap_choice =='poisson':
+        likely_indices = rng.choice(np.arange(len(original_samples)), np.random.poisson(1), p=fpop_norm)
+
+    else:
+        likely_indices = rng.choice(np.arange(len(original_samples)), p=fpop_norm)
+
+    reweighted_sample = original_samples[likely_indices]
+    reweighted_pdet = original_pdet[likely_indices]
+    return reweighted_sample, reweighted_pdet
+
+
 def normdata(dataV):
     normalized_data = (dataV - np.min(dataV)) / (np.max(dataV) - np.min(dataV))
     return normalized_data
 
-
-################## Iterative Reweighting #######################
-###### Gaussian samples for each event and reweight them with fpop prob
-def prior_factor_function(samples):
-    """
-    KDE is computed on Log10[Mz] and z 
-    but Mz is uniform in prior for PE samples
-    samples is vstacked so we need Mz samples
-    to be non-log and z will remain the same
-    """
-    log10Mz_vals, z_vals = samples[:, 0], samples[:, 1]
-    ln_Mz = log10Mz_vals * np.log(10)
-    factor = 1.0/(np.exp(ln_Mz))
-    return factor
-
-def get_random_sample(original_samples, bootstrap='poisson'):
-    """
-    return random sample without reweighting with or without
-    Poisson distribution
-    ----------
-    original_samples : samples of an event
-    kwargs :
-        bootstrap : poisson
-                    by default 
-                choose nopoisson or None for non poisson distibution
-                in that case only one sample will be returned
-    ----------
-    return poisson distributed random (0, 1 or more) samples from given
-    samples of an event 
-    """
-    rng = np.random.default_rng()
-    if bootstrap =='poisson':
-        reweighted_sample = rng.choice(original_samples, np.random.poisson(1))
-    else:
-        reweighted_sample = rng.choice(original_samples)
-    return reweighted_sample
-
-
-def get_reweighted_sample(original_samples, original_pdet, fpop_kde, sample_option='reweight', bootstrap='poisson',  prior_factor=prior_factor_function):
-    """
-    reweight given samples for an event using fpop (pdf of population/rate) 
-    from all events sample as probabilty for each sample
-    -------------
-    original_samples : as name suggests, the samples of an event
-    fpop_kde : previous pdf [kde/rate] estimate from all events samples
-    sample_option : we always reweight of this is not needed
-    inputs 
-    original_samples: list of mean of each event samples 
-    fpop_kde: kde_object [GaussianKDE(opt alpha, opt bw and Cov=True)]
-    kwargs:
-    bootstrap: [poisson or nopoisson] from argparser option
-    prior_factor: for log10Mz parameter to take into account non uniform prior
-    ------------
-    return : reweighted_sample and reweighted_pdet
-    of events whose all  samples are given
-    as original_samples
-    either  none, one or array of  samples due to poisson distribution
-    """
-    # we need standardization here too on original samples
-    original_samples, s_repeat = standardize_data(original_samples, original_samples,)
-    fpop_at_samples = fpop_kde.evaluate(original_samples)
-    #apply prior factor
-    #fpop_at_samples *=  prior_factor(original_samples)
-    fpop = fpop_at_samples/fpop_at_samples.sum()
-    if bootstrap =='poisson':
-        #find mostly likely Indices as we need it for pdet
-        likely_indices = np.random.choice(np.arange(len(original_samples)), np.random.poisson(1), p=fpop)
-    else:
-        likely_indices = np.random.choice(np.arange(len(original_samples)), p=fpop)
-
-    reweighted_sample = original_samples[likely_indices]
-    reweighted_pdet = original_pdet[likely_indices]
-    return reweighted_sample, reweighted_pdet
-
-
-def median_bufferkdelist_reweighted_samples(original_samples, original_pdet, Log10_Mz_val, z_val, kdelist, bootstrap_choice='poisson', prior_factor=prior_factor_function):
-    """
-    using previous 100 ietrations pdf estimates (kde or rate)
-    interpolate all of them to get values of KDE on
-    original samples(means of PE samples)
-    take the average of KDE values[at those samples]
-    and normalize them and use them  as probablity in
-    reweighting samples
-    -------------
-    inputs
-    sample : original samples or mean of PE samples
-    x_grid_kde : x-grid onto which kdes are computes
-    kdelist : previous 100 kdes in iterations [buffer]
-    bootstrap_choice :by default poisson or use from opts.bootstrap option
-    prior_factor: for log10Mz parameter to take into account non uniform prior
-    return: 
-    reweighted sample , pdet [none, one or array of values] based on poisson 
-    dsitrubution with mean 1.
-    """
-    #adding standardization here to see 
-    original_samples, s_repeat = standardize_data(original_samples, original_samples,)
-    mediankdevals = np.percentile(kdelist, 50, axis=0)
-    interp = RegularGridInterpolator((Log10_Mz_val, z_val), mediankdevals.T, bounds_error=False, fill_value=0.0)
-    kde_interp_vals = interp(original_samples)#*prior_factor(original_samples)
-    fpop = kde_interp_vals/sum(kde_interp_vals)
-    if bootstrap_choice =='poisson':
-        #find mostly likely Indices as we need it for pdet
-        likely_indices = np.random.choice(np.arange(len(original_samples)), np.random.poisson(1), p=fpop)
-    else:
-        likely_indices = np.random.choice(np.arange(len(original_samples)), p=fpop)
-
-    reweighted_sample = original_samples[likely_indices]
-    reweighted_pdet = original_pdet[likely_indices]
-    return reweighted_sample, reweighted_pdet
-
-###############################################################################
-
-###Intrinsic Data
-data_intrinsic = np.loadtxt("../data_files/combined_intrinsicdata100years_Mz_z_withPlanck_cosmology.dat").T
-TheoryMtot = data_intrinsic[0]
-Theory_z = data_intrinsic[1]
-
-##PE sample Data
+###################Specific HDF data #########
 hdf_file = h5.File(opts.datafilename, 'r')
-sampleslists_Mz = []
+sampleslists_M = []
 sampleslists_z = []
 sampleslists_pdet = []
-medianlist_Mz = []
+medianlist_M = []
 medianlist_z = []
 medianlist_pdet = []
+
 #print(hdf_file.keys())
 plt.figure()
+#print(len(hdf_file.keys()))
+#quit()
 for event_name in hdf_file.keys():
+    #print(event_name)
     data = hdf_file[event_name][...].T
     #print(data)
-    data_Mz = data[0]
+    data_M = data[0]
     data_z = data[1]
-    data_pdet = data[-1] #sigmacorrected pdet
-    #indices = np.argwhere(data_z <= 20.0).flatten()
-    data_z = data_z#[indices]
-    dataMz = data_Mz#[indices]
-    datapdet = data_pdet#[indices]
-    plt.scatter(np.log10(dataMz), data_z, marker='+')
-    sampleslists_Mz.append(dataMz)
+    data_pdet = data[2]
+    indices = np.arange(len(data_M)).tolist()
+    # remove samples  with z >20
+    #indices = np.argwhere(data_z <=20).flatten()
+    #indices = np.argwhere(data_pdet > 1e-3).flatten()
+    # remove samples with pdet < 1e-4
+    #indices = np.argwhere(data_pdet >= 1e-3).flatten()
+    data_z = data_z[indices]
+    dataM = data_M[indices]
+    datapdet = data_pdet[indices]
+    if np.min(data_z) >= 9:
+        print(event_name)
+    plt.scatter(dataM, data_z, marker='+')
+    sampleslists_M.append(dataM)
     sampleslists_pdet.append(datapdet)
     sampleslists_z.append(data_z)
-    medianlist_Mz.append(np.median(dataMz))
+    medianlist_M.append(np.median(dataM))
     medianlist_z.append(np.median(data_z))
     medianlist_pdet.append(np.median(datapdet))
 
-hdf_file.close()
-plt.xlabel("Log10[M]")
-plt.ylabel("z")
-plt.title("100 samples per event 4 years")
-plt.savefig("colored_lensed_100samples_per_event_4years.png")
-#plt.show()
-plt.close()
 
-##data into arrays
-median_arr_Mz = np.array(medianlist_Mz)
+
+plt.xlabel(r"$M_\mathrm{source}\, [M_\odot]$", fontsize=20)
+plt.ylabel(r"$\mathrm{redshift}$", fontsize=20)
+plt.semilogx()
+plt.grid()
+plt.title("100 samples per event")
+plt.tight_layout()
+plt.savefig(opts.pathplot+opts.methodtag+"colored_samples_perevent_year92.png")
+plt.show()
+#plt.close()
+hdf_file.close()
+
+
+median_arr_M = np.array(medianlist_M)
 median_arr_z = np.array(medianlist_z)
 median_arr_pdet = np.array(medianlist_pdet)
-
-flat_Mz_all = np.concatenate(sampleslists_Mz).flatten()#np.array(sampleslists_Mz).flatten()
+flat_M_all = np.concatenate(sampleslists_M).flatten()#np.array(sampleslists_M).flatten()
 flat_z_all = np.concatenate(sampleslists_z).flatten()
 flat_pdet_all = np.concatenate(sampleslists_pdet).flatten()
+#############################################
+########## ASTROPHYSICAL catalog DATA
+data = np.loadtxt("/home/jsadiq/Research/E_awKDE/CatalogLISA/lensedPopIII/combined_intrinsicdata100years_Mz_z_withPlanck_cosmology.dat").T
+Theory_z = data[1]
+TheoryMtot = data[0]
+#We want source frame mass
+TheoryMtot /= (1.0 +  Theory_z)
+#################Range of values for KDE evaluation ################
+######### 1:  Range of at which to evluate KDE can be set in parser Use logpace points
+M_grid = np.logspace(2., 9., 200)  #100-10^9
+z_grid = np.logspace(-1, np.log10(20), 200) #0.1 to 20
 
-#### grid points for evaluation
-Mz_eval = np.logspace(2, 10, 200)[:, np.newaxis]
-Mz_grid = np.logspace(2, 10, 200)
-z_eval = np.logspace(-1, np.log10(20), 200)[:, np.newaxis]
-z_grid = np.logspace(-1, np.log10(20), 200)
+XX, YY = np.meshgrid(np.log10(M_grid), z_grid)
+nonlnXX, YY = np.meshgrid(M_grid, z_grid) #For plotting
 
-##### We will use Weighted KDE code here for 1/pdet for weights rather awkde
-XX, YY = np.meshgrid(np.log10(Mz_grid), z_grid, indexing='xy')
 grid_pts = np.array(list(map(np.ravel, [XX, YY]))).T
-prior_factor_XX, prior_factor_YY = np.meshgrid(1.0/Mz_grid/np.log(10), np.ones_like(z_grid))# we need to factor
+median_samples = np.vstack((np.log10(median_arr_M) ,median_arr_z)).T
+all_samples = np.vstack((np.log10(flat_M_all), flat_z_all)).T
+print("total samples", len(flat_pdet_all), len(flat_z_all), all_samples.shape)
+median_weights =  1.0/median_arr_pdet
+##### KDE parameters
+bwgrid = opts.bw_grid      # 15 choices from 0.001 to 0.5
+#current_kde, errorkdeval, errorbBW, erroraALP = u_awkde.kde_twoD_with_do_optimize(median_samples, grid_pts, bwgrid, alphagrid, ret_kde=True, optimize_method='loo_cv')
+current_kde, errorkdeval, errorbBW = u_scipykde.kde_twoD_with_do_optimize(median_samples, grid_pts, bwgrid, weights=median_weights, ret_kde=True, optimize_method='loo_cv')
+ZZ = errorkdeval.reshape(XX.shape)
+print("optbw =",  errorbBW)
+u_plot.new2DKDE(nonlnXX, YY,  ZZ, median_arr_M, median_arr_z, iterN=0, saveplot=True, title='medianPEKDE', show_plot=True, pathplot=opts.pathplot)
 
-##### We will use Weighted KDE code here for 1/pdet for weights rather awkde
-_1_over_XX, nl_1_over_YY = np.meshgrid(1.0/Mz_grid/np.log(10), np.ones_like(z_grid))# we need to factor
-med_sample = np.vstack((np.log10(median_arr_Mz), median_arr_z)).T
-all_samples = np.hstack((np.log10(flat_Mz_all), flat_z_all))
-print("data shapes", med_sample.shape, all_samples.shape)
+u_plot.ThreePlots(XX, YY, ZZ, ZZ, ZZ, nonlnXX, TheoryMtot, Theory_z, iternumber=0, plot_name='medianPEKDE', make_errorbars=False, show_plot=True, pathplot=opts.pathplot)
+############## All data KDE ##############################################################################
+ZZall = u_scipykde.kde_scipy(all_samples, grid_pts, global_bandwidth=errorbBW, weights=1.0/np.sqrt(flat_pdet_all), ret_kde=False)
+ZZall = ZZall.reshape(XX.shape)
 
+u_plot.new2DKDE(nonlnXX, YY,  ZZall, flat_M_all, flat_z_all, iterN=0, saveplot=True, title='KDEallsamples', show_plot=True, pathplot=opts.pathplot)
+u_plot.ThreePlots(XX, YY, ZZall, ZZall, ZZall, nonlnXX, TheoryMtot, Theory_z, iternumber=0, plot_name='allPEsamplesKDE', make_errorbars=False, show_plot=True, pathplot=opts.pathplot)
 
-############### Code is expensive we got opt vals on median and save them below
-alphagrid = [0.0, 0.1, 0.2, 0.3, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0] #opts.alpha_grid #[1.0]
-bwgrid = np.logspace(-1.3, -0.3, 15).tolist()
-
-#on medians to get first optimized results and use same if we want to intrinsic KDE (weights not needed for optimization)
-
-ZZ, shiftedbw, shiftedalp, kde_object = get_opt_params_and_kde(med_sample, grid_pts, bwgrid, alphagrid, cv_method='2-fold', k=4, weights=1.0/median_arr_pdet, standardization=True)
-ZZ = ZZ.reshape(XX.shape)
-print("opt bw, alp = ", shiftedbw, shiftedalp)
-
-################# Check this  properly
-##### Before Reweighting we Try with Prior Factor correction to see?
-ZZ2 = ZZ*prior_factor_XX 
-
-fig = plt.figure(figsize=(12, 6))
-ax1 = fig.add_subplot(121, projection='3d')
-surface = ax1.plot_surface(XX, YY, ZZ, cmap='viridis', norm=LogNorm())
-fig.colorbar(surface, label='Log Scale')
-ax1.set_title('Mesh Plot')
-# Plot as contour
-ax2 = fig.add_subplot(122)
-contour = ax2.contour(XX, YY, ZZ, cmap='viridis')
-ax2.set_title('No-Prior Factor')
-plt.savefig("Without_prior_factor_median2DKDE.png")
-#plt.show()
-plt.close()
-
-fig = plt.figure(figsize=(12, 6))
-ax1 = fig.add_subplot(121, projection='3d')
-#ax1.plot_surface(XX, YY, ZZ2, cmap='viridis')
-surface = ax1.plot_surface(XX, YY, ZZ2, cmap='viridis', norm=LogNorm())
-fig.colorbar(surface, label='Log Scale')
-ax1.set_title('Mesh Plot')
-# Plot as contour
-ax2 = fig.add_subplot(122)
-contour = ax2.contour(np.exp(XX)/np.log(10), YY, ZZ2, cmap='viridis')
-ax2.set_title('with Prior_factor')
-ax2.set_xscale('log')
-plt.savefig("With_prior_factor_median2DKDE.png")
-#plt.show()
-plt.close()
-
-u_plot.ThreePlots(XX, YY, ZZ2,  TheoryMtot, Theory_z, logKDE=True,  iternumber=0, plot_name='initial')
-
-#quit()
-weights = 1.0/flat_pdet_all 
-#weights /= np.sum(weights)
-
-print(len(weights), all_samples.shape)
-
-############## Because we have 200*91 samples this below is too expensive
-#kdeobject, kdevals = adaptive_weighted_kde(all_samples, grid_pts, alpha=alp2D, bw=bw2D, weights=weights, returnKDE=True)
-## Make a plot to check
-#kdevals  = kdevals.reshape(XX.shape)
-#ThreePlots(XX, YY, kdevals,  IntM, IntKDEM, IntZ, IntKDEz)
-#
 
 #### Iterative weighted-KDE
-
-#frateh5 = h5.File('saved_Data2DIterativeCase.hdf5', 'w')
-#dsetxx = frateh5.create_dataset('LogMz', data=XX)
-#dsetyy = frateh5.create_dataset('z', data=YY)
-
-discard = 100
-kdevalslist = []
-iterbwlist = [] 
-iteralplist = [] 
-frateh5 = h5.File('output_k4fold_adpative_weighted_kdepy_withstandardization.hdf5', 'w')
-dsetxx = frateh5.create_dataset('LogMz', data=XX)
+iterbwlist = []
+iterbwlist = []
+frateh5 = h5.File(opts.output_filename+'Scipy_weighted_SqrtPdetInweights_no_prior_factorKFOLDCV'+opts.methodtag+'Data2DIterativeCase.hdf5', 'w')
+dsetxx = frateh5.create_dataset('M', data=nonlnXX)
 dsetyy = frateh5.create_dataset('z', data=YY)
 
-for i in range(1000+discard):
-    rwpdet = []
+discard = int(opts.buffer_start)   # how many iterations to discard default =100
+Nbuffer = int(opts.buffer_interval) #100 buffer [how many (x-numbers of ) previous iteration to use in reweighting with average of those past (x-numbers of ) iteration results
+kdevalslist = []
+TotalIterations = int(opts.total_iterations)#1000
+
+print("optimization of alpha and bw with ", opts.crossvalidationmethod)
+for i in range(TotalIterations+discard):
+    print("i - ", i)
     rwsamples = []
-    for samples_Mz, samples_z, samples_pdet  in zip(sampleslists_Mz, sampleslists_z, sampleslists_pdet):
-        samples = np.vstack((np.log10(samples_Mz), samples_z)).T
-        if i <= 100+discard:
-            rwsample_k, rwpdet_k = get_reweighted_sample(samples, samples_pdet, kde_object, bootstrap='poisson', prior_factor=prior_factor_function)
-        else:
-            rwsample_k, rwpdet_k =  median_bufferkdelist_reweighted_samples(samples, samples_pdet, np.log10(Mz_grid), z_grid, kdevalslist[-10:], bootstrap_choice='poisson', prior_factor=prior_factor_function)
-        rwsamples.append(rwsample_k)
-        rwpdet.append(rwpdet_k)
+    rwpdets = []
+    for sampleM, sample_z,  samples_pdet in zip(sampleslists_M, sampleslists_z, sampleslists_pdet):
+        samples= np.vstack((np.log10(sampleM), sample_z)).T
+        if i < discard:
+            rwsample, rwpdet = get_reweighted_sample(samples, samples_pdet, current_kde, bootstrap=opts.bootstrap_option, use_prior=False)
+        else: 
+            rwsample, rwpdet = median_bufferkdelist_reweighted_samples(samples, samples_pdet, np.log10(M_grid), z_grid, kdevalslist[-Nbuffer:], bootstrap_choice=opts.bootstrap_option, use_prior=False)
+        #for bootstrapping      
+#        rwsample, rwpdet = get_random_sample(samples, samples_pdet, bootstrap='poisson')
+        rwsamples.append(rwsample)
+        rwpdets.append(rwpdet)
     rwsamples = np.concatenate(rwsamples)
-    print(len(rwsamples), rwsamples.shape)
-    rwpdet = np.concatenate(rwpdet) 
-    weights = 1.0/rwpdet
-    #kdeobject, kdevals = adaptive_weighted_kde(rwsamples, grid_pts, alpha=alp2D, bw=bw2D, weights=weights, returnKDE=True)
-    kdevals, shiftedbw, shiftedalp, kde_object = get_opt_params_and_kde(rwsamples, grid_pts, bwgrid, alphagrid, cv_method='4-fold', k=4, weights=1.0/rwpdet, standardization=True)
-
-    kdevals = kdevals.reshape(XX.shape)
-    kdevalslist.append(kdevals)
+    rwpdets = np.concatenate(rwpdets)
+    print("iter", i, "  totalsamples = ", len(rwsamples))
+    print("optimization of alpha and bw with ")
+    current_kde, current_kdeval, shiftedbw =   u_scipykde.kde_twoD_with_do_optimize(rwsamples, grid_pts, bwgrid, weights=1.0/np.sqrt(rwpdets), ret_kde=True, optimize_method='kfold_cv')
+    #u_awkde.get_Ndimkde(np.array(rwsamples), grid_pts, alphagrid, bwgrid, ret_kde=True)
+    current_kdeval = current_kdeval.reshape(XX.shape)
+    kdevalslist.append(current_kdeval)
     iterbwlist.append(shiftedbw)
-    iteralplist.append(shiftedalp)
-    frateh5.create_dataset('kde_iter{0:04}'.format(i), data=kdevals)     
-    if i > 0 and i %100 == 0:
-        u_plot.ThreePlots(XX, YY, kdevals,  TheoryMtot, Theory_z, logKDE=True,  iternumber=i, plot_name='average_')
-        u_plot.histogram_datalist(iterbwlist[-100:], dataname='bw', pathplot='bwhist', Iternumber=i)
-        u_plot.histogram_datalist(iteralplist[-100:], dataname='alpha', pathplot='alphit', Iternumber=i)
-
+    frateh5.create_dataset('kde_iter{0:04}'.format(i), data=current_kdeval)
+    if  i > 0.0 and i %Nbuffer == 0:
+        #medKDE = np.percentile(kdevalslist[-Nbuffer:], 50, axis=0)
+        #KDE5th = np.percentile(kdevalslist[-Nbuffer:], 5, axis=0)
+        #KDE95th = np.percentile(kdevalslist[-Nbuffer:], 95, axis=0)
+        #u_plot.ThreePlots(XX, YY, medKDE, KDE95th, KDE5th, nonlnXX, TheoryMtot, Theory_z ,iternumber=i, plot_name='AvergeKDE2D', make_errorbars=True, show_plot=True, pathplot = opts.pathplot)
+        u_plot.ThreePlots(XX, YY, current_kdeval, current_kdeval, current_kdeval, nonlnXX, TheoryMtot, Theory_z ,iternumber=i, plot_name='KDE2D', make_errorbars=False, show_plot=False, pathplot = opts.pathplot)
+        u_plot.histogram_datalist(iterbwlist[-Nbuffer:], dataname='bw', pathplot=opts.pathplot, Iternumber=i)
     print(i, "step done ")
 frateh5.create_dataset('bandwidths', data=iterbwlist)
-frateh5.create_dataset('alphas', data=iteralplist)
 frateh5.close()
-average_list =  np.percentile(kdevalslist[100:], 50, axis=0)
-u_plot.ThreePlots(XX, YY, average_list,  TheoryMtot, Theory_z, iternumber=1001, plot_name='percentile_combined_all')
-# Transpose the list of lists to get lists of corresponding elements
-transposed_lists = list(map(list, zip(*kdevalslist[100:])))
-# Calculate the average of each corresponding element
-average_list = [sum(values) / len(values) for values in transposed_lists]
-u_plot.ThreePlots(XX, YY, kdevals, TheoryMtot, Theory_z, logKDE=True,  iternumber=1000, plot_name='combined_all')
+# Calculate the average of all KDE after discard
+average_list = np.percentile(kdevalslist[discard:], 50, axis=0) 
+pc5th_list = np.percentile(kdevalslist[discard:], 5, axis=0) 
+pc95th_list = np.percentile(kdevalslist[discard:], 95, axis=0) 
+u_plot.ThreePlots(XX, YY, average_list, pc95th_list, pc5th_list, nonlnXX, TheoryMtot, Theory_z, iternumber=1001, plot_name='combined1000iterations', make_errorbars=True, show_plot=False, pathplot=opts.pathplot)
+
+
+#alpha bw plots
+u_plot.bandwidth_correlation(iterbwlist, number_corr=discard, error=0.02,  pathplot=opts.pathplot)
+u_plot.bandwidth_correlation(iterbwlist, number_corr=discard, error=0.0, pathplot=opts.pathplot)
+
