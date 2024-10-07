@@ -52,6 +52,12 @@ def get_zarray(DLarray_Mpc):
     print("done")
     return zvals
 
+def lensing_distribution(dL):
+    """from paper Eq3 or see Paper arXiv 1601.07112 dL eq"""
+    z = z_at_value(Planck15.luminosity_distance,  float(dL)*units.Mpc)
+    sigma_lense = dL * 0.066*( (1 - (1. + z)**(-0.25))/(0.25) )**(1.8)
+    return random.normal(loc=dL, scale=sigma_lense, size=1.)
+
 import json
 import h5py as h5
 
@@ -113,6 +119,8 @@ def get_mc_angles_snr(filetag, Nsample=200, MC_iters=1000, snr_threshold=8.0):
             }
             snr_arr = []
             inc_arr = []
+            #for lensing 
+            dist_value = DLv[k]
             for i in range(MC_iters):
                 phi, inc, lambd, beta, psi = draw_random_angles()
                 params_base['inc'] = inc
@@ -120,6 +128,8 @@ def get_mc_angles_snr(filetag, Nsample=200, MC_iters=1000, snr_threshold=8.0):
                 params_base['lambda'] = lambd
                 params_base['beta'] = beta
                 params_base['psi'] = psi
+                #######Modify line below for lensing
+                params_base['dist'] = lensing_distribution(dist_value)
                 tdisignal = lisa.GenerateLISATDISignal_SMBH(params_base, **waveform_params)
                 snr_val = tdisignal['SNR']
                 snr_arr.append(snr_val)
@@ -127,13 +137,8 @@ def get_mc_angles_snr(filetag, Nsample=200, MC_iters=1000, snr_threshold=8.0):
 
             print(len(snr_arr))
             print("done index, max-minsnr", k,  np.max(snr_arr), np.min(snr_arr))
-            #compute pdet
-#            if np.max(snr_arr)> 50.0:
-#                plt.plot(inc_arr, snr_arr, 'r+')
-#                plt.xlabel("inc")
-#                plt.ylabel("snr")
-#                plt.show()
-            pdet = np.sum(np.array(snr_arr) > 8.0)/MC_iters
+            pdet = np.sum(np.array(snr_arr) >  snr_threshold)/MC_iters
+            ### matched filter Pdet
             mf_pdet = sum(Prob_matchfilter_SNR(snr_arr, snr_threshold))/len(snr_arr)
             if pdet == 0.0:
                 print("indx, pdet, mfpdet, m1, m2, DL, lnlik, pos_snr = ", indices[k], pdet, mf_pdet, m1v[k], m2v[k], DLv[k], lnlik[k], posterior_snrv[k], )
@@ -145,7 +150,7 @@ def get_mc_angles_snr(filetag, Nsample=200, MC_iters=1000, snr_threshold=8.0):
     fh5.close()
     return 0
 
-with open('f377', 'r')as fileall:
+with open('feventlists', 'r')as fileall:
     ftags = [line.strip() for line in fileall.readlines()]
 for ftag in ftags:
     get_mc_angles_snr(ftag, Nsample=100, MC_iters=1000)
