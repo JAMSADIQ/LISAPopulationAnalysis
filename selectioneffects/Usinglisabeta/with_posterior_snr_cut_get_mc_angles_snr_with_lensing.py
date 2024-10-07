@@ -48,7 +48,7 @@ def draw_random_angles():
 def get_zarray(DLarray_Mpc):
     zvals = np.zeros_like(DLarray_Mpc)
     for it in range(len(zvals)):
-        zvals[it] = z_at_value(Planck15.luminosity_distance,  float(DLarray_Mpc[it])*units.Mpc)
+        zvals[it] = z_at_value(Planck15.luminosity_distance,  DLarray_Mpc[it]*units.Mpc)
     print("done")
     return zvals
 
@@ -59,7 +59,7 @@ def lensing_distribution(dL):
     sigma_lense = dL * 0.066*( (1 - (1. + zval)**(-0.25))/(0.25) )**(1.8)
     return np.random.normal(loc=dL, scale=sigma_lense, size=1.)
 
-def get_mc_angles_snr(filetag, snr_threshold, Nsample=200, MC_iters=1000):
+def get_mc_angles_snr(filetag, snr_threshold, Nsample=200, MC_iters=1000, apply_lensing=False):
     """
     call json file for waveform, h5 file for intrinsic params
     compute 1000 snr at one pe sample
@@ -120,7 +120,9 @@ def get_mc_angles_snr(filetag, snr_threshold, Nsample=200, MC_iters=1000):
             for i in range(MC_iters):
                 params_base['Deltat'] = np.random.uniform(0.0, 4.0) * 3.154e+7
                 #######Modify line below for lensing
-                params_base['dist'] = lensing_distribution(dist_value)
+                if apply_lensing == True:
+                    params_base['dist'] = lensing_distribution(dist_value)
+                ###################
                 phi, inc, lambd, beta, psi = draw_random_angles()
                 params_base['inc'] = inc
                 params_base['phi'] = phi
@@ -151,5 +153,5 @@ def get_mc_angles_snr(filetag, snr_threshold, Nsample=200, MC_iters=1000):
 with open('ftag', 'r') as fileall:
     ftags = [line.strip() for line in fileall.readlines()]
 for ftag in ftags:
-    get_mc_angles_snr(ftag, snr_threshold=8., Nsample=100, MC_iters=1000)
+    get_mc_angles_snr(ftag, snr_threshold=8., Nsample=100, MC_iters=1000, apply_lensing=True)
 
