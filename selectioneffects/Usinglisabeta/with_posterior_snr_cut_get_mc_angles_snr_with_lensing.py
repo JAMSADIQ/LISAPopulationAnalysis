@@ -53,11 +53,26 @@ def get_zarray(DLarray_Mpc):
     return zvals
 
 def lensing_distribution(dL):
-    """from paper Eq3 or see Paper arXiv 1601.07112 dL eq"""
+    """from paper Eq3 or see Paper arXiv 1601.07112 dL eq
+     Args:
+        dL (float): Input luminosity distance in Mpc.
+
+    Returns:
+        float: dL  with weak-lensing-scatter  (luminosity distance in Mpc).
+
+    Caution:
+    to avoid negative dL we use sigma in lndL
+    so sigma_lens will be sigma_dL/dL  = 0.066*( (1 - (1. + zval)**(-0.25))/(0.25) )**(1.8)
+    use lndL as mean in  np.random.normal
+    and take exponetial to get back dL without log
+    """
     #dL is in Mpc
     zval = z_at_value(Planck15.luminosity_distance,  float(dL)*units.Mpc)
-    sigma_lense = dL * 0.066*( (1 - (1. + zval)**(-0.25))/(0.25) )**(1.8)
-    return np.random.normal(loc=dL, scale=sigma_lense, size=1)
+    ln_dL = np.log(dL)
+    sigma_lense_by_dL =  0.066*( (1 - (1. + zval)**(-0.25))/(0.25) )**(1.8)
+    scatter_ln_dL = np.random.normal(loc=ln_dL, scale=sigma_lense_by_dL, size=1)
+    scatter_dL =  np.exp(scatter_ln_dL)
+    return scatter_dL
 
 def get_mc_angles_snr(filetag, snr_threshold, Nsample=200, MC_iters=1000, apply_lensing=False):
     """
