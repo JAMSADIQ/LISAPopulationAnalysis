@@ -52,6 +52,12 @@ def get_zarray(DLarray_Mpc):
     print("done")
     return zvals
 
+def lensing_distribution(dL):
+    """from paper Eq3 or see Paper arXiv 1601.07112 dL eq"""
+    #dL is in Mpc
+    zval = z_at_value(Planck15.luminosity_distance,  float(dL)*units.Mpc)
+    sigma_lense = dL * 0.066*( (1 - (1. + zval)**(-0.25))/(0.25) )**(1.8)
+    return random.normal(loc=dL, scale=sigma_lense, size=1.)
 
 def get_mc_angles_snr(filetag, snr_threshold, Nsample=200, MC_iters=1000):
     """
@@ -109,9 +115,12 @@ def get_mc_angles_snr(filetag, snr_threshold, Nsample=200, MC_iters=1000):
             }
             snr_arr = []
             inc_arr = []
+            dist_value = DLv[k]
             # Now we use MC over angles and random time to merger
             for i in range(MC_iters):
                 params_base['Deltat'] = np.random.uniform(0.0, 4.0) * 3.154e+7
+                #######Modify line below for lensing
+                params_base['dist'] = lensing_distribution(dist_value)
                 phi, inc, lambd, beta, psi = draw_random_angles()
                 params_base['inc'] = inc
                 params_base['phi'] = phi
