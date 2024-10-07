@@ -57,7 +57,7 @@ def lensing_distribution(dL):
     #dL is in Mpc
     zval = z_at_value(Planck15.luminosity_distance,  float(dL)*units.Mpc)
     sigma_lense = dL * 0.066*( (1 - (1. + zval)**(-0.25))/(0.25) )**(1.8)
-    return np.random.normal(loc=dL, scale=sigma_lense, size=1.)
+    return np.random.normal(loc=dL, scale=sigma_lense, size=1)
 
 def get_mc_angles_snr(filetag, snr_threshold, Nsample=200, MC_iters=1000, apply_lensing=False):
     """
